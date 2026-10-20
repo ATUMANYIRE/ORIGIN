@@ -79,6 +79,21 @@ from app.modules.safety.service import (
 from app.modules.simulation.contract import (
     get_module_contract_status as get_simulation_status,
 )
+from app.modules.simulation.schemas import (
+    BranchComparisonResponse,
+    CalibrationRunRead,
+    DigitalTwinModelRead,
+    HypothesisSimulationRequest,
+    ScientificMemoryEntryRead,
+    SimulationBenchmarkSuiteResponse,
+    SimulationBranchCreateRequest,
+    SimulationBranchRead,
+    SimulationSnapshotRead,
+    SnapshotCreateRequest,
+    TwinCalibrationRequest,
+)
+from app.modules.simulation.service import DigitalTwinService, ScientificMemoryService
+from app.modules.simulation.simulator import ALLOWLISTED_TWIN_INTERVENTIONS
 from app.modules.telemetry.schemas import (
     MetricSeriesSummary,
     OTLPMetricsPayload,
@@ -651,6 +666,289 @@ async def export_investigation_report(
     )
 
 
+@api_router.post(
+    "/investigations/{investigation_id}/simulate",
+    tags=["investigations", "digital-twin"],
+)
+async def simulate_investigation_hypothesis(
+    investigation_id: str,
+    payload: HypothesisSimulationRequest,
+    db: AsyncSession = Depends(get_db),
+    _principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """Simulate a causal hypothesis inside the calibrated Digital Twin with epistemic disclosure."""
+    return await DigitalTwinService.simulate_hypothesis_for_investigation(
+        db, investigation_id, payload
+    )
+
+
+# ---------------------------------------------------------------------------
+# Boundary 6: Living Digital Twin, Counterfactual Branches & Scientific Memory
+# ---------------------------------------------------------------------------
+
+
+@api_router.get("/twins/interventions", tags=["digital-twin"])
+async def list_twin_interventions() -> dict[str, Any]:
+    """List allowlisted counterfactual interventions supported by the Digital Twin Engine."""
+    return {
+        "allowlisted_twin_interventions": sorted(ALLOWLISTED_TWIN_INTERVENTIONS),
+        "epistemic_notice": (
+            "Digital Twin interventions operate strictly on in-memory/persisted simulation "
+            "models and never mutate live production or laboratory infrastructure."
+        ),
+    }
+
+
+@api_router.post(
+    "/twins/calibrate",
+    status_code=status.HTTP_201_CREATED,
+    tags=["digital-twin"],
+)
+async def calibrate_digital_twin(
+    payload: TwinCalibrationRequest,
+    db: AsyncSession = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(verify_api_key),
+    correlation_id: str = Depends(get_correlation_id),
+) -> dict[str, Any]:
+    """Calibrate a new versioned Digital Twin model from stored telemetry and experiments."""
+    return await DigitalTwinService.create_or_calibrate_twin(
+        db,
+        request=payload,
+        actor=principal.actor,
+        correlation_id=correlation_id,
+    )
+
+
+@api_router.get(
+    "/twins",
+    response_model=list[DigitalTwinModelRead],
+    tags=["digital-twin"],
+)
+async def list_digital_twins(
+    system_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+) -> list[DigitalTwinModelRead]:
+    """List calibrated Digital Twin model versions."""
+    return await DigitalTwinService.list_twin_models(
+        db, system_id=system_id, limit=limit
+    )
+
+
+@api_router.get(
+    "/twins/{twin_model_id}",
+    response_model=DigitalTwinModelRead,
+    tags=["digital-twin"],
+)
+async def get_digital_twin(
+    twin_model_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> DigitalTwinModelRead:
+    """Retrieve metadata, parameters, validity bounds, and warnings for a Digital Twin model."""
+    rec = await DigitalTwinService.get_twin_model_record(db, twin_model_id)
+    return DigitalTwinModelRead.model_validate(rec)
+
+
+@api_router.get(
+    "/twins/{twin_model_id}/calibrations",
+    response_model=list[CalibrationRunRead],
+    tags=["digital-twin"],
+)
+async def get_twin_calibrations(
+    twin_model_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> list[CalibrationRunRead]:
+    """Inspect calibration runs, held-out residuals, and quality metrics for a Digital Twin."""
+    return await DigitalTwinService.list_calibration_runs(
+        db, twin_model_id=twin_model_id
+    )
+
+
+@api_router.post(
+    "/simulations/snapshots",
+    response_model=SimulationSnapshotRead,
+    status_code=status.HTTP_201_CREATED,
+    tags=["digital-twin"],
+)
+async def create_simulation_snapshot(
+    payload: SnapshotCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    _principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> SimulationSnapshotRead:
+    """Create a serializable simulation snapshot for deterministic rewind and branching."""
+    return await DigitalTwinService.create_snapshot(db, payload)
+
+
+@api_router.get(
+    "/simulations/snapshots",
+    response_model=list[SimulationSnapshotRead],
+    tags=["digital-twin"],
+)
+async def list_simulation_snapshots(
+    twin_model_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+) -> list[SimulationSnapshotRead]:
+    """List saved simulation state snapshots."""
+    return await DigitalTwinService.list_snapshots(
+        db, twin_model_id=twin_model_id, limit=limit
+    )
+
+
+@api_router.get(
+    "/simulations/snapshots/{snapshot_id}",
+    response_model=SimulationSnapshotRead,
+    tags=["digital-twin"],
+)
+async def get_simulation_snapshot(
+    snapshot_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> SimulationSnapshotRead:
+    """Inspect a saved simulation snapshot including RNG and pending event state."""
+    rec = await DigitalTwinService.get_snapshot_record(db, snapshot_id)
+    return SimulationSnapshotRead.model_validate(rec)
+
+
+@api_router.post(
+    "/simulations/branches",
+    response_model=SimulationBranchRead,
+    status_code=status.HTTP_201_CREATED,
+    tags=["digital-twin"],
+)
+async def create_simulation_branch(
+    payload: SimulationBranchCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(verify_api_key),
+    correlation_id: str = Depends(get_correlation_id),
+) -> SimulationBranchRead:
+    """Run a baseline or counterfactual simulation branch from a Digital Twin or snapshot."""
+    return await DigitalTwinService.create_and_run_branch(
+        db,
+        request=payload,
+        actor=principal.actor,
+        correlation_id=correlation_id,
+    )
+
+
+@api_router.get(
+    "/simulations/branches",
+    response_model=list[SimulationBranchRead],
+    tags=["digital-twin"],
+)
+async def list_simulation_branches(
+    twin_model_id: str | None = Query(default=None),
+    system_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+) -> list[SimulationBranchRead]:
+    """List baseline and counterfactual simulation branches."""
+    return await DigitalTwinService.list_branches(
+        db, twin_model_id=twin_model_id, system_id=system_id, limit=limit
+    )
+
+
+@api_router.get(
+    "/simulations/branches/{branch_id}",
+    response_model=SimulationBranchRead,
+    tags=["digital-twin"],
+)
+async def get_simulation_branch(
+    branch_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> SimulationBranchRead:
+    """Retrieve full trajectory, event log, outcome summary, and uncertainty for a branch."""
+    rec = await DigitalTwinService.get_branch_record(db, branch_id)
+    return SimulationBranchRead.model_validate(rec)
+
+
+@api_router.post(
+    "/simulations/branches/{branch_id}/cancel",
+    response_model=SimulationBranchRead,
+    tags=["digital-twin"],
+)
+async def cancel_simulation_branch(
+    branch_id: str,
+    db: AsyncSession = Depends(get_db),
+    _principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> SimulationBranchRead:
+    """Cancel a simulation branch."""
+    return await DigitalTwinService.cancel_branch(db, branch_id)
+
+
+@api_router.get(
+    "/simulations/compare",
+    response_model=BranchComparisonResponse,
+    tags=["digital-twin"],
+)
+async def compare_simulation_branches(
+    baseline_branch_id: str = Query(...),
+    alternative_branch_id: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+) -> BranchComparisonResponse:
+    """Compare a baseline simulation branch against an alternative counterfactual branch."""
+    return await DigitalTwinService.compare_branches(
+        db,
+        baseline_branch_id=baseline_branch_id,
+        alternative_branch_id=alternative_branch_id,
+    )
+
+
+@api_router.get(
+    "/simulations/branches/{branch_id}/export",
+    tags=["digital-twin"],
+)
+async def export_simulation_branch_report(
+    branch_id: str,
+    compare_with_branch_id: str | None = Query(default=None),
+    format: Literal["markdown", "json"] = Query(default="markdown"),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Export a reproducible Markdown & JSON report for a simulation branch."""
+    return await DigitalTwinService.export_simulation_report(
+        db,
+        branch_id=branch_id,
+        compare_with_branch_id=compare_with_branch_id,
+        report_format=format,
+    )
+
+
+@api_router.post(
+    "/simulations/benchmarks/run",
+    response_model=SimulationBenchmarkSuiteResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["digital-twin"],
+)
+async def run_digital_twin_benchmarks(
+    random_seed: int = Query(default=2026, ge=1, le=999999),
+    db: AsyncSession = Depends(get_db),
+    _principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> SimulationBenchmarkSuiteResponse:
+    """Execute all 4 canonical Milestone 03/05 Digital Twin benchmarks (A, B, C, D)."""
+    return await DigitalTwinService.run_simulation_benchmarks(
+        db, random_seed=random_seed
+    )
+
+
+@api_router.get(
+    "/memory/entries",
+    response_model=list[ScientificMemoryEntryRead],
+    tags=["scientific-memory"],
+)
+async def list_scientific_memory(
+    system_id: str | None = Query(default=None),
+    epistemic_kind: str | None = Query(default=None),
+    limit: int = Query(default=80, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+) -> list[ScientificMemoryEntryRead]:
+    """Query persistent Scientific Memory (observations, experiments, models, predictions)."""
+    return await ScientificMemoryService.list_memory_entries(
+        db,
+        system_id=system_id,
+        epistemic_kind=epistemic_kind,
+        limit=limit,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Protected Benchmark Controller & Hidden-Fault Evaluator Endpoints
 # (Requires X-Benchmark-Controller-Key; rejects Investigator credentials with 403)
@@ -751,7 +1049,7 @@ async def list_audit_events(
 async def list_module_boundaries() -> dict[str, Any]:
     """Return explicit implementation status across all 9 ORIGIN architectural boundaries."""
     return {
-        "milestone": "02/05 — Autonomous Causal Scientist & Experimental Discovery Engine",
+        "milestone": "03/05 — Living Digital Twin, Counterfactual Intelligence & Scientific Memory",
         "boundaries": [
             {
                 "boundary_number": 1,

@@ -1,4 +1,4 @@
-"""Architecture contract for Counterfactual & Topology Simulation (Milestone 03/05)."""
+"""Architecture contract and status for Living Digital Twin & Simulation (Milestone 03/05)."""
 
 from typing import Any, Protocol
 
@@ -24,16 +24,36 @@ class SimulationEngineProtocol(Protocol):
 
 
 def get_module_contract_status() -> dict[str, Any]:
-    """Return truthful implementation status for Milestone 01/05."""
+    """Return truthful implementation status for Milestone 03/05."""
     return {
         "module": "simulation",
         "boundary_number": 6,
-        "status": "architecture_contract_only",
-        "target_milestone": "03/05 — Counterfactual Simulation & Pre-flight Validation",
-        "database_tables_provisioned": [],
-        "execution_enabled": False,
-        "notice": (
-            "Simulation interface contracts are defined in Milestone 01/05. "
-            "Counterfactual propagation solvers will be implemented in Milestone 03/05."
+        "status": "implemented",
+        "target_milestone": (
+            "03/05 — Living Digital Twin, Counterfactual Intelligence & Scientific Memory"
         ),
+        "database_tables_provisioned": [
+            "digital_twin_models",
+            "calibration_runs",
+            "simulation_snapshots",
+            "simulation_branches",
+            "scientific_memory_entries",
+        ],
+        "execution_enabled": True,
+        "capabilities": [
+            (
+                "Discrete-event + discrete-step queueing, concurrency & shared DB "
+                "lock contention simulator"
+            ),
+            (
+                "Evidence-based parameter calibration with strict train vs held-out "
+                "validation split (MAE, RMSE, NRMSE)"
+            ),
+            "Serializable simulation state snapshots and bit-exact RNG/event deterministic rewind",
+            "Parallel counterfactual branching with Monte Carlo 95% prediction intervals",
+            (
+                "Persistent Scientific Memory distinguishing observations, "
+                "experiments, and predictions"
+            ),
+        ],
     }

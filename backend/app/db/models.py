@@ -527,3 +527,246 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, index=True
     )
+
+
+class DigitalTwinModelRecord(Base):
+    """Versioned calibrated Digital Twin model of a registered system (Milestone 03/05)."""
+
+    __tablename__ = "digital_twin_models"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    system_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("registered_systems.id", ondelete="CASCADE"), index=True
+    )
+    investigation_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    version_tag: Mapped[str] = mapped_column(String(80), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="calibrated", index=True
+    )
+    calibration_method: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="moments_and_heldout_validation"
+    )
+    parameters_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    parameter_uncertainty_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    validity_bounds_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    calibration_summary_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    assumptions_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    warnings_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    evidence_sources_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, index=True
+    )
+
+
+class CalibrationRunRecord(Base):
+    """Immutable record of a Digital Twin calibration and held-out validation run."""
+
+    __tablename__ = "calibration_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    system_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("registered_systems.id", ondelete="CASCADE"), index=True
+    )
+    twin_model_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("digital_twin_models.id", ondelete="CASCADE"), index=True
+    )
+    investigation_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="completed")
+    train_sample_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    validation_sample_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
+    train_correlation_ids_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    validation_correlation_ids_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    mae_ms: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    rmse_ms: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    normalized_error_pct: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0
+    )
+    residuals_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    parameter_estimates_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    validity_envelope_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    warnings_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class SimulationSnapshotRecord(Base):
+    """Serializable Digital Twin state snapshot for deterministic rewind & branching."""
+
+    __tablename__ = "simulation_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    system_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("registered_systems.id", ondelete="CASCADE"), index=True
+    )
+    twin_model_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("digital_twin_models.id", ondelete="CASCADE"), index=True
+    )
+    branch_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    label: Mapped[str] = mapped_column(String(160), nullable=False)
+    sim_clock_sec: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    step_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    random_seed: Mapped[int] = mapped_column(Integer, nullable=False, default=42)
+    rng_state_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    pending_events_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    service_states_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    active_interventions_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class SimulationBranchRecord(Base):
+    """Baseline or counterfactual Digital Twin branch execution and trajectory."""
+
+    __tablename__ = "simulation_branches"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    system_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("registered_systems.id", ondelete="CASCADE"), index=True
+    )
+    twin_model_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("digital_twin_models.id", ondelete="CASCADE"), index=True
+    )
+    investigation_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    hypothesis_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    parent_branch_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    initial_snapshot_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("simulation_snapshots.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    branch_type: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="baseline"
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="COMPLETED", index=True
+    )
+    random_seed: Mapped[int] = mapped_column(Integer, nullable=False, default=42)
+    horizon_seconds: Mapped[float] = mapped_column(Float, nullable=False, default=60.0)
+    dt_seconds: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    monte_carlo_runs: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    interventions_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    simulation_params_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    trajectory_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    event_log_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    outcome_summary_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    uncertainty_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    warnings_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, index=True
+    )
+
+
+class ScientificMemoryEntryRecord(Base):
+    """Persistent scientific memory distinguishing observations, experiments, and predictions."""
+
+    __tablename__ = "scientific_memory_entries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    system_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("registered_systems.id", ondelete="CASCADE"), index=True
+    )
+    epistemic_kind: Mapped[str] = mapped_column(
+        String(48), nullable=False, index=True
+    )
+    # "historical_observation" | "experimental_evidence" | "calibrated_model"
+    # | "counterfactual_prediction" | "prediction_validation"
+    title: Mapped[str] = mapped_column(String(240), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    investigation_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    hypothesis_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    twin_model_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    branch_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    experiment_run_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    predicted_outcome_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    observed_outcome_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    validation_metrics_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    provenance_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, index=True
+    )
+
