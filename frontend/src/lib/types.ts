@@ -467,3 +467,252 @@ export interface InvestigationCreatePayload {
   timeout_seconds?: number;
   auto_run?: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Milestone 03/05: Living Digital Twin, Counterfactuals & Scientific Memory
+// ---------------------------------------------------------------------------
+
+export type TwinInterventionType =
+  | "increase_replicas"
+  | "reduce_incoming_traffic"
+  | "adjust_concurrency_limit"
+  | "enable_circuit_breaker"
+  | "reduce_downstream_latency"
+  | "adjust_db_connection_capacity"
+  | "simulate_dependency_failure"
+  | "restore_configuration";
+
+export interface TwinInterventionSpec {
+  intervention_type: TwinInterventionType;
+  target_service_key: string;
+  value: number;
+  apply_at_sec: number;
+  description?: string;
+}
+
+export interface ServiceStepMetrics {
+  service_key: string;
+  replica_count: number;
+  available_replicas: number;
+  concurrency_limit: number;
+  active_concurrency: number;
+  queue_depth: number;
+  max_queue_depth: number;
+  arrival_rate_rps: number;
+  effective_capacity_rps: number;
+  saturation_pct: number;
+  mean_latency_ms: number;
+  p95_latency_ms: number;
+  error_rate_pct: number;
+  throughput_rps: number;
+  circuit_breaker_state: string;
+  circuit_breaker_open_until_sec: number;
+  db_lock_wait_ms: number;
+}
+
+export interface SimulationStepTrajectoryPoint {
+  step_index: number;
+  timestamp_sec: number;
+  incoming_traffic_rps: number;
+  system_mean_latency_ms: number;
+  system_p95_latency_ms: number;
+  system_error_rate_pct: number;
+  system_throughput_rps: number;
+  max_queue_depth: number;
+  max_saturation_pct: number;
+  primary_bottleneck_service: string;
+  services: Record<string, ServiceStepMetrics>;
+  step_events: Array<Record<string, unknown>>;
+}
+
+export interface SimulationOutcomeSummary {
+  epistemic_label: string;
+  steps_executed: number;
+  horizon_seconds: number;
+  mean_latency_ms: number;
+  peak_latency_ms: number;
+  final_latency_ms: number;
+  p95_latency_ms: number;
+  mean_error_rate_pct: number;
+  peak_error_rate_pct: number;
+  mean_throughput_rps: number;
+  max_queue_depth: number;
+  max_saturation_pct: number;
+  recovery_time_sec: number | null;
+  primary_bottleneck_service: string;
+  circuit_breaker_trips: number;
+}
+
+export interface DigitalTwinModelRead {
+  id: string;
+  system_id: string;
+  investigation_id: string | null;
+  version_number: number;
+  version_tag: string;
+  status: string;
+  calibration_method: string;
+  parameters_json: {
+    incoming_traffic_rps: number;
+    services: Record<string, Record<string, unknown>>;
+    evaluation_order?: string[];
+  };
+  parameter_uncertainty_json: Record<string, Record<string, unknown>>;
+  validity_bounds_json: Record<string, unknown>;
+  calibration_summary_json: Record<string, unknown>;
+  assumptions_json: string[];
+  warnings_json: string[];
+  evidence_sources_json: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface CalibrationResidual {
+  service_key: string;
+  held_out_sample_count: number;
+  observed_mean_latency_ms: number;
+  simulated_mean_latency_ms: number;
+  residual_ms: number;
+  abs_error_ms: number;
+  relative_error_pct: number;
+}
+
+export interface CalibrationRunRead {
+  id: string;
+  system_id: string;
+  twin_model_id: string;
+  investigation_id: str | null;
+  status: string;
+  train_sample_count: number;
+  validation_sample_count: number;
+  train_correlation_ids_json: string[];
+  validation_correlation_ids_json: string[];
+  mae_ms: number;
+  rmse_ms: number;
+  normalized_error_pct: number;
+  residuals_json: CalibrationResidual[];
+  parameter_estimates_json: Record<string, unknown>;
+  validity_envelope_json: Record<string, unknown>;
+  warnings_json: string[];
+  created_at: string;
+}
+
+type str = string;
+
+export interface SimulationSnapshotRead {
+  id: string;
+  system_id: string;
+  twin_model_id: string;
+  branch_id: string | null;
+  label: string;
+  sim_clock_sec: number;
+  step_index: number;
+  random_seed: number;
+  rng_state_json: Record<string, unknown>;
+  pending_events_json: Array<Record<string, unknown>>;
+  service_states_json: Record<string, ServiceStepMetrics>;
+  active_interventions_json: Array<Record<string, unknown>>;
+  created_at: string;
+}
+
+export interface SimulationBranchRead {
+  id: string;
+  system_id: string;
+  twin_model_id: string;
+  investigation_id: string | null;
+  hypothesis_id: string | null;
+  parent_branch_id: string | null;
+  initial_snapshot_id: string | null;
+  name: string;
+  branch_type: string;
+  status: string;
+  random_seed: number;
+  horizon_seconds: number;
+  dt_seconds: number;
+  monte_carlo_runs: number;
+  interventions_json: TwinInterventionSpec[];
+  simulation_params_json: Record<string, unknown>;
+  trajectory_json: SimulationStepTrajectoryPoint[];
+  event_log_json: Array<Record<string, unknown>>;
+  outcome_summary_json: SimulationOutcomeSummary;
+  uncertainty_json: {
+    monte_carlo_runs?: number;
+    mean_latency_ci95_ms?: [number, number];
+    peak_latency_ci95_ms?: [number, number];
+    error_rate_ci95_pct?: [number, number];
+    step_bands?: Array<{
+      step_index: number;
+      timestamp_sec: number;
+      latency_mean_ms: number;
+      latency_lower_95_ms: number;
+      latency_upper_95_ms: number;
+      error_rate_mean_pct: number;
+      error_rate_lower_95_pct: number;
+      error_rate_upper_95_pct: number;
+    }>;
+  };
+  warnings_json: string[];
+  created_at: string;
+}
+
+export interface BranchComparisonResponse {
+  epistemic_label: string;
+  epistemic_notice: string;
+  baseline_branch: SimulationBranchRead;
+  alternative_branch: SimulationBranchRead;
+  delta_metrics: {
+    latency_delta_ms: number;
+    latency_reduction_pct: number;
+    peak_latency_delta_ms: number;
+    error_rate_delta_pct: number;
+    throughput_delta_rps: number;
+    max_queue_delta: number;
+    saturation_delta_pct: number;
+    baseline_recovery_sec: number | null;
+    alternative_recovery_sec: number | null;
+  };
+  tradeoff_analysis: string[];
+  shared_bottleneck_warnings: string[];
+}
+
+export interface ScientificMemoryEntryRead {
+  id: string;
+  system_id: string;
+  epistemic_kind: string;
+  title: string;
+  summary: string;
+  investigation_id: string | null;
+  hypothesis_id: string | null;
+  twin_model_id: string | null;
+  branch_id: string | null;
+  experiment_run_id: string | null;
+  predicted_outcome_json: Record<string, unknown>;
+  observed_outcome_json: Record<string, unknown>;
+  validation_metrics_json: Record<string, unknown>;
+  provenance_json: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface SimulationBenchmarkScenarioResult {
+  benchmark_key: string;
+  title: string;
+  description: string;
+  twin_model_id: string;
+  model_version_tag: string;
+  calibration_mae_ms: number;
+  calibration_rmse_ms: number;
+  baseline_branch_id: string;
+  intervention_branch_ids: string[];
+  baseline_outcome: Record<string, unknown>;
+  intervention_outcomes: Array<Record<string, unknown>>;
+  uncertainty_summary: Record<string, unknown>;
+  key_scientific_finding: string;
+  limitations: string[];
+  passed_verification: boolean;
+}
+
+export interface SimulationBenchmarkSuiteResponse {
+  total_benchmarks: number;
+  passed_count: number;
+  executed_at: string;
+  benchmarks: SimulationBenchmarkScenarioResult[];
+}
+

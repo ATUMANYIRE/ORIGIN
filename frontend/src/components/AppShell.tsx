@@ -8,6 +8,7 @@ import {
   Cpu,
   FlaskConical,
   GitBranch,
+  History,
   Layers,
   Microscope,
   Play,
@@ -33,6 +34,7 @@ const NAV_ITEMS = [
   { href: "/topology", label: "Topology Explorer", icon: GitBranch },
   { href: "/telemetry", label: "Telemetry Workspace", icon: Activity },
   { href: "/investigations", label: "Causal Scientist", icon: Microscope },
+  { href: "/twin", label: "Living Digital Twin", icon: History },
   {
     href: "/systems/origin-synthetic-lab",
     label: "System Detail & Registry",
@@ -150,7 +152,7 @@ export function AppShell({ children, onTelemetryEvent }: AppShellProps) {
                     ORIGIN
                   </span>
                   <span className="text-[10px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#F3EFEA] border border-[#E4DFD7] text-slate-700">
-                    M02/05 · CAUSAL SCIENTIST ENGINE
+                    M03/05 · LIVING DIGITAL TWIN
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 hidden sm:block leading-none mt-0.5">

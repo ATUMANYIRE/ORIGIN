@@ -1,6 +1,9 @@
 import type {
   AuditEventRead,
+  BranchComparisonResponse,
+  CalibrationRunRead,
   DependencyRead,
+  DigitalTwinModelRead,
   EvidenceRead,
   ExperimentDefinitionRead,
   ExperimentRunRead,
@@ -14,11 +17,16 @@ import type {
   MetricPointRead,
   MetricSeriesSummary,
   ModuleBoundaryStatus,
+  ScientificMemoryEntryRead,
   ServiceRead,
+  SimulationBenchmarkSuiteResponse,
+  SimulationBranchRead,
+  SimulationSnapshotRead,
   SpanRead,
   SystemDetailRead,
   SystemRead,
   TopologyGraphResponse,
+  TwinInterventionSpec,
 } from "./types";
 
 export const API_BASE_URL =
@@ -248,6 +256,143 @@ export async function exportInvestigationReport(
       investigationId
     )}/export?format=${format}`
   );
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 03/05: Living Digital Twin, Counterfactuals & Scientific Memory API
+// ---------------------------------------------------------------------------
+
+export async function calibrateDigitalTwin(payload: {
+  system_slug?: string;
+  investigation_id?: string;
+  version_tag?: string;
+  min_required_observations?: number;
+  validation_split_ratio?: number;
+  strict_rejection?: boolean;
+}): Promise<{
+  twin_model: DigitalTwinModelRead;
+  calibration_run: CalibrationRunRead;
+  epistemic_label: string;
+}> {
+  return apiFetch("/api/v1/twins/calibrate", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchDigitalTwins(
+  systemId?: string
+): Promise<DigitalTwinModelRead[]> {
+  const qs = systemId ? `?system_id=${encodeURIComponent(systemId)}` : "";
+  return apiFetch(`/api/v1/twins${qs}`);
+}
+
+export async function fetchTwinCalibrations(
+  twinModelId: string
+): Promise<CalibrationRunRead[]> {
+  return apiFetch(
+    `/api/v1/twins/${encodeURIComponent(twinModelId)}/calibrations`
+  );
+}
+
+export async function createSimulationSnapshot(payload: {
+  twin_model_id: string;
+  branch_id?: string;
+  step_index?: number;
+  label?: string;
+  random_seed?: number;
+}): Promise<SimulationSnapshotRead> {
+  return apiFetch("/api/v1/simulations/snapshots", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchSimulationSnapshots(
+  twinModelId?: string
+): Promise<SimulationSnapshotRead[]> {
+  const qs = twinModelId
+    ? `?twin_model_id=${encodeURIComponent(twinModelId)}`
+    : "";
+  return apiFetch(`/api/v1/simulations/snapshots${qs}`);
+}
+
+export async function createSimulationBranch(payload: {
+  twin_model_id: string;
+  name: string;
+  branch_type?: "baseline" | "counterfactual" | "hypothesis_test" | "benchmark";
+  parent_branch_id?: string;
+  initial_snapshot_id?: string;
+  investigation_id?: string;
+  hypothesis_id?: string;
+  random_seed?: number;
+  horizon_seconds?: number;
+  dt_seconds?: number;
+  incoming_traffic_rps?: number;
+  monte_carlo_runs?: number;
+  interventions?: TwinInterventionSpec[];
+}): Promise<SimulationBranchRead> {
+  return apiFetch("/api/v1/simulations/branches", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchSimulationBranches(
+  twinModelId?: string
+): Promise<SimulationBranchRead[]> {
+  const qs = twinModelId
+    ? `?twin_model_id=${encodeURIComponent(twinModelId)}`
+    : "";
+  return apiFetch(`/api/v1/simulations/branches${qs}`);
+}
+
+export async function compareSimulationBranches(
+  baselineBranchId: string,
+  alternativeBranchId: string
+): Promise<BranchComparisonResponse> {
+  return apiFetch(
+    `/api/v1/simulations/compare?baseline_branch_id=${encodeURIComponent(
+      baselineBranchId
+    )}&alternative_branch_id=${encodeURIComponent(alternativeBranchId)}`
+  );
+}
+
+export async function exportSimulationBranchReport(
+  branchId: string,
+  compareWithBranchId?: string,
+  format: "markdown" | "json" = "markdown"
+): Promise<{
+  branch_id: string;
+  format: string;
+  markdown: string;
+  report: Record<string, unknown>;
+}> {
+  const compareQs = compareWithBranchId
+    ? `&compare_with_branch_id=${encodeURIComponent(compareWithBranchId)}`
+    : "";
+  return apiFetch(
+    `/api/v1/simulations/branches/${encodeURIComponent(
+      branchId
+    )}/export?format=${format}${compareQs}`
+  );
+}
+
+export async function runDigitalTwinBenchmarks(
+  randomSeed = 2026
+): Promise<SimulationBenchmarkSuiteResponse> {
+  return apiFetch(`/api/v1/simulations/benchmarks/run?random_seed=${randomSeed}`, {
+    method: "POST",
+  });
+}
+
+export async function fetchScientificMemory(
+  epistemicKind?: string
+): Promise<ScientificMemoryEntryRead[]> {
+  const qs = epistemicKind
+    ? `?epistemic_kind=${encodeURIComponent(epistemicKind)}`
+    : "";
+  return apiFetch(`/api/v1/memory/entries${qs}`);
 }
 
 export function formatProvenanceBadge(

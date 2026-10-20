@@ -94,11 +94,54 @@ test.describe("ORIGIN Milestone 01/05 & 02/05 Browser Verification", () => {
       "# ORIGIN Scientific Investigation Report"
     );
 
-    // 6. Navigate to Future Research Contracts and verify honest boundary status
+    // 6. Navigate to Living Digital Twin (/twin), calibrate model, create counterfactual branch, and export report
+    await page.goto("/twin");
+    await expect(
+      page.getByRole("heading", {
+        name: "Living Digital Twin & Counterfactual Intelligence",
+      })
+    ).toBeVisible();
+    await expect(page.getByTestId("epistemic-separation-banner")).toContainText(
+      "COUNTERFACTUAL PREDICTION"
+    );
+
+    await page
+      .getByTestId("twin-calib-profile-select")
+      .selectOption("payment_latency_spike");
+    await page.getByTestId("calibrate-twin-btn").click();
+
+    await expect(page.getByTestId("twin-version-badge")).toBeVisible({
+      timeout: 30000,
+    });
+    await expect(page.getByTestId("calibration-mae-readout")).toContainText(
+      "ms"
+    );
+    await expect(page.getByTestId("twin-node-checkout-service")).toBeVisible();
+
+    // Test Time Machine Step +1s and Rewind
+    await page.getByTestId("time-machine-step-btn").click();
+    await page.getByTestId("time-machine-rewind-btn").click();
+
+    // Spawn a counterfactual branch reducing payment-simulator latency
+    await page.getByTestId("spawn-counterfactual-btn").click();
+    await expect(page.getByTestId("branch-comparison-deltas")).toBeVisible({
+      timeout: 30000,
+    });
+    await expect(page.getByTestId("comparison-latency-delta")).toContainText(
+      "-"
+    );
+
+    // Export reproducible Digital Twin Markdown report
+    await page.getByTestId("export-twin-report-btn").click();
+    await expect(page.getByTestId("twin-report-markdown")).toContainText(
+      "# ORIGIN Digital Twin Counterfactual Report"
+    );
+
+    // 7. Navigate to Research Contracts and verify all 9 boundaries are implemented
     await page.goto("/research");
     await expect(
-      page.getByTestId("research-contract-simulation")
-    ).toContainText("CONTRACT ONLY");
+      page.getByTestId("implemented-module-simulation")
+    ).toBeVisible();
     await expect(
       page.getByTestId("implemented-module-experimentation")
     ).toBeVisible();
