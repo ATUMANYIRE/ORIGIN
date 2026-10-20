@@ -1,4 +1,4 @@
-name: ORIGIN CI Pipeline
+name: ORIGIN CI/CD Acceptance Pipeline
 
 on:
   push:
@@ -6,60 +6,117 @@ on:
   pull_request:
     branches: ["main", "master"]
 
+permissions:
+  contents: read
+
 jobs:
-  backend-verify:
-    name: Backend Lint, Typecheck, Migrations & Pytest
+  security-audit:
+    name: Security & Secret Leakage Scanner
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install backend dependencies
+      - name: Execute Security & Secret Audit Scanner
+        run: python scripts/audit-security.py
+
+  backend-verify:
+    name: Backend Lint, Typecheck, Migrations & Pytest (30 Tests)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: origin
+          POSTGRES_PASSWORD: origin_password
+          POSTGRES_DB: origin
+        ports:
+          - 5438:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6399:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Backend Dependencies
         working-directory: ./backend
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Run Ruff Linter
+      - name: Ruff Code Quality & Formatting Linter
         working-directory: ./backend
         run: ruff check app tests alembic
 
-      - name: Run Mypy Strict Type Checking
+      - name: Mypy Strict Type Checking (50 source files)
         working-directory: ./backend
         run: mypy app
 
-      - name: Run Pytest Unit & Integration Suite (incl. Alembic Migrations)
+      - name: Run Pytest Suite (Causal, Twin, Recovery, Scientific Integrity)
         working-directory: ./backend
+        env:
+          ORIGIN_ENV: test
+          DATABASE_URL: postgresql+asyncpg://origin:origin_password@localhost:5438/origin
+          REDIS_URL: redis://localhost:6399/0
+          ORIGIN_API_KEY: origin-dev-scientific-key-2026
         run: pytest -v
 
+      - name: Run Scientific Simulation & Resilience Benchmark Suite
+        env:
+          PYTHONPATH: ./backend
+        run: python scripts/benchmark-resilience.py
+
   frontend-verify:
-    name: Frontend Typecheck, Vitest & Production Build
+    name: Frontend Typecheck, Vitest & Next.js Production Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "./frontend/package-lock.json"
 
-      - name: Install frontend dependencies
+      - name: Install Frontend Dependencies
         working-directory: ./frontend
-        run: npm install
+        run: npm ci
 
-      - name: Run TypeScript Strict Typecheck
+      - name: Strict TypeScript Compilation
         working-directory: ./frontend
         run: npm run typecheck
 
-      - name: Run Vitest Unit Suite
+      - name: Vitest Unit Test Suite
         working-directory: ./frontend
         run: npm run test
 
-      - name: Run Next.js Production Build
+      - name: Next.js Optimized Production Build (12 Routes)
         working-directory: ./frontend
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
