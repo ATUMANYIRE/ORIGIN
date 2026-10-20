@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     origin_api_key: str = Field(
         default="origin-dev-scientific-key-2026", alias="ORIGIN_API_KEY"
     )
+    origin_benchmark_controller_key: str = Field(
+        default="origin-private-benchmark-evaluator-key-2026",
+        alias="ORIGIN_BENCHMARK_CONTROLLER_KEY",
+    )
     database_url: str = Field(
         default="postgresql+asyncpg://origin:origin_password@localhost:5438/origin",
         alias="DATABASE_URL",

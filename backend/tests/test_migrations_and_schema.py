@@ -34,10 +34,12 @@ def test_alembic_upgrade_and_downgrade_cycle(tmp_path: Path) -> None:
         "telemetry_sources",
         "metric_observations",
         "span_observations",
+        "investigations",
         "experiment_definitions",
         "experiment_runs",
         "hypotheses",
         "evidence_records",
+        "benchmark_runs",
         "audit_events",
     }
     assert expected_tables.issubset(tables), f"Missing tables: {expected_tables - tables}"

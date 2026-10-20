@@ -240,8 +240,61 @@ class SpanObservation(Base):
     )
 
 
+class InvestigationRecord(Base):
+    """Autonomous scientific investigation lifecycle record (Milestone 02/05)."""
+
+    __tablename__ = "investigations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    system_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("registered_systems.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(240), nullable=False)
+    target_service_key: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    target_metric: Mapped[str] = mapped_column(
+        String(120), nullable=False, default="request_latency_ms"
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="CREATED", index=True
+    )
+    # Lifecycle: CREATED -> OBSERVING -> HYPOTHESIZING -> PLANNING -> EXPERIMENTING
+    #            -> EVALUATING -> CONCLUDED / INCONCLUSIVE / FAILED / CANCELLED
+    experiment_budget: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    experiments_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sample_size_per_arm: Mapped[int] = mapped_column(Integer, nullable=False, default=6)
+    random_seed: Mapped[int] = mapped_column(Integer, nullable=False, default=42)
+    timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    concluded_cause_service_key: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
+    concluded_mechanism: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    conclusion_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    uncertainty_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    baseline_summary_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    lifecycle_history_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    decision_history_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
 class ExperimentDefinition(Base):
-    """Controlled scientific experiment specification (Schema active; execution in Prompt 3)."""
+    """Controlled scientific experiment specification (Active in Milestone 02/05)."""
 
     __tablename__ = "experiment_definitions"
 
@@ -249,9 +302,32 @@ class ExperimentDefinition(Base):
     system_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("registered_systems.id", ondelete="CASCADE"), index=True
     )
+    investigation_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    hypothesis_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     target_service_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    target_metric: Mapped[str] = mapped_column(
+        String(120), nullable=False, default="request_latency_ms"
+    )
+    measurement_unit: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="ms"
+    )
     perturbation_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    treatment_condition_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    control_condition_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    sample_size_per_arm: Mapped[int] = mapped_column(Integer, nullable=False, default=6)
+    random_seed: Mapped[int] = mapped_column(Integer, nullable=False, default=42)
+    budget_cost: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    selection_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    selection_reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
     safety_envelope_json: Mapped[dict[str, Any]] = mapped_column(
         JSON, nullable=False, default=dict
     )
@@ -262,7 +338,7 @@ class ExperimentDefinition(Base):
 
 
 class ExperimentRun(Base):
-    """Execution record of a controlled experiment (Schema active; execution in Prompt 3)."""
+    """Execution record of a controlled experiment with treatment/control arms."""
 
     __tablename__ = "experiment_runs"
 
@@ -273,8 +349,20 @@ class ExperimentRun(Base):
     system_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("registered_systems.id", ondelete="CASCADE"), index=True
     )
+    investigation_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    hypothesis_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     AbortReason: Mapped[str | None] = mapped_column("abort_reason", Text, nullable=True)
+    assignment_order_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    trial_observations_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
     metrics_summary_json: Mapped[dict[str, Any]] = mapped_column(
         JSON, nullable=False, default=dict
     )
@@ -288,7 +376,7 @@ class ExperimentRun(Base):
 
 
 class HypothesisRecord(Base):
-    """Falsifiable scientific hypothesis about system behavior (Prompt 2 engine)."""
+    """Falsifiable scientific hypothesis about system behavior (Milestone 02/05)."""
 
     __tablename__ = "hypotheses"
 
@@ -296,20 +384,52 @@ class HypothesisRecord(Base):
     system_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("registered_systems.id", ondelete="CASCADE"), index=True
     )
+    investigation_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
     statement: Mapped[str] = mapped_column(Text, nullable=False)
+    suspected_mechanism: Mapped[str] = mapped_column(
+        String(160), nullable=False, default="downstream_latency_propagation"
+    )
     root_cause_service_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
     affected_service_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    target_metric: Mapped[str] = mapped_column(
+        String(120), nullable=False, default="request_latency_ms"
+    )
+    recommended_intervention: Mapped[str] = mapped_column(
+        String(120), nullable=False, default="none"
+    )
+    supporting_observations_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    contradicting_observations_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    expected_intervention_effect_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    alternative_explanations_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
     confidence_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    score_interpretation: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="Heuristic prior based on observational correlation; requires intervention.",
+    )
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="proposed"
-    )  # "proposed" | "testing" | "supported" | "refuted"
+    )  # "proposed" | "testing" | "supported" | "refuted" | "inconclusive"
+    revision_history_json: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
 
 
 class EvidenceRecord(Base):
-    """Immutable scientific evidence linking telemetry observations to a hypothesis."""
+    """Immutable scientific evidence linking telemetry and experiments to a hypothesis."""
 
     __tablename__ = "evidence_records"
 
@@ -317,13 +437,67 @@ class EvidenceRecord(Base):
     system_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("registered_systems.id", ondelete="CASCADE"), index=True
     )
+    investigation_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
+    experiment_run_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
     hypothesis_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("hypotheses.id", ondelete="SET NULL"), nullable=True, index=True
     )
     evidence_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    # "observational_correlation" | "controlled_experiment"
+    direction: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="supporting"
+    )  # "supporting" | "contradicting" | "inconclusive"
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     correlation_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    effect_size: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ci_lower: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ci_upper: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sample_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     artifact_payload_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class BenchmarkRunRecord(Base):
+    """Private Benchmark Controller evaluation record.
+
+    NEVER queried or exposed to Investigator APIs.
+    """
+
+    __tablename__ = "benchmark_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    system_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    investigation_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
+    scenario_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    hidden_fault_profile: Mapped[str] = mapped_column(String(120), nullable=False)
+    expected_root_cause_service: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
+    expected_mechanism: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    investigator_concluded_service: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
+    investigator_concluded_mechanism: Mapped[str | None] = mapped_column(
+        String(160), nullable=True
+    )
+    investigation_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    experiments_performed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_trials: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    elapsed_ms: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    conclusion_correct: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_inconclusive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    evidence_ids_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    evaluation_notes_json: Mapped[dict[str, Any]] = mapped_column(
         JSON, nullable=False, default=dict
     )
     created_at: Mapped[datetime] = mapped_column(

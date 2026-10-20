@@ -59,3 +59,44 @@ async def verify_api_key(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Missing authentication credentials (X-Origin-Key header required).",
     )
+
+
+async def verify_benchmark_controller(
+    x_benchmark_key: str | None = Header(
+        default=None, alias="X-Benchmark-Controller-Key"
+    ),
+    x_origin_api_key: str | None = Header(default=None, alias="X-Origin-Key"),
+) -> AuthenticatedPrincipal:
+    """Strictly verify Benchmark Controller credentials.
+
+    Ordinary Investigator credentials (X-Origin-Key) are explicitly rejected (403 Forbidden)
+    to enforce strict epistemic separation between the Investigator and hidden ground truth.
+    """
+    settings = get_settings()
+    if not x_benchmark_key:
+        if x_origin_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Access Denied: Investigator credentials cannot access private "
+                    "Benchmark Controller or ground-truth endpoints."
+                ),
+            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing X-Benchmark-Controller-Key header for Benchmark Controller.",
+        )
+
+    if not secrets.compare_digest(
+        x_benchmark_key, settings.origin_benchmark_controller_key
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid X-Benchmark-Controller-Key.",
+        )
+
+    return AuthenticatedPrincipal(
+        actor="benchmark-controller",
+        role="benchmark-evaluator",
+        authenticated=True,
+    )

@@ -1,4 +1,4 @@
-"""Architecture contract for Controlled Experimentation (Milestone 03/05)."""
+"""Architecture contract and status for Controlled Experimentation (Boundary 5/9)."""
 
 from typing import Any, Protocol
 
@@ -18,7 +18,7 @@ class ExperimentProposalContract(BaseModel):
 
 
 class ExperimentEngineProtocol(Protocol):
-    """Protocol to be implemented in Milestone 03/05 (Active Experimentation)."""
+    """Protocol implemented in Milestone 02/05 (Controlled Experimentation Engine)."""
 
     async def schedule_experiment(
         self, proposal: ExperimentProposalContract
@@ -27,16 +27,18 @@ class ExperimentEngineProtocol(Protocol):
 
 
 def get_module_contract_status() -> dict[str, Any]:
-    """Return truthful implementation status for Milestone 01/05."""
+    """Return truthful implementation status for Milestone 02/05."""
     return {
         "module": "experimentation",
         "boundary_number": 5,
-        "status": "architecture_contract_only",
-        "target_milestone": "03/05 — Controlled Perturbation & Active Experimentation",
+        "status": "implemented",
+        "target_milestone": "02/05 — Controlled Experimentation & Statistical Discovery",
         "database_tables_provisioned": ["experiment_definitions", "experiment_runs"],
-        "execution_enabled": False,
-        "notice": (
-            "Database schema and safety envelope contracts are provisioned in Milestone 01/05. "
-            "Autonomous experiment execution is intentionally disabled until Milestone 03/05."
-        ),
+        "execution_enabled": True,
+        "capabilities": [
+            "Allowlisted intervention planner & validator",
+            "Seeded block-randomized treatment/control assignment",
+            "Welch two-sample t-test, 95% CI, and Cohen's d effect sizes",
+            "Experiment budget & cancellation enforcement",
+        ],
     }

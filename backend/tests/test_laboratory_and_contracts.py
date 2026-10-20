@@ -81,14 +81,13 @@ async def test_architectural_module_contracts_truthfulness(client: AsyncClient) 
     boundaries = {b["boundary_number"]: b for b in data["boundaries"]}
     assert len(boundaries) == 9
 
-    # First 4 are implemented
-    for b_num in (1, 2, 3, 4):
+    # Modules 1, 2, 3, 4, 5, 7, 8 are implemented in Milestone 2
+    for b_num in (1, 2, 3, 4, 5, 7, 8):
         assert boundaries[b_num]["status"] == "implemented"
 
-    # Modules 5, 6, 7, 8 explicitly state they are architecture contracts only
-    for b_num in (5, 6, 7, 8):
-        assert boundaries[b_num]["status"] == "architecture_contract_only"
-        assert boundaries[b_num]["execution_enabled"] is False
+    # Module 6 (Simulation) explicitly states it is an architecture contract only
+    assert boundaries[6]["status"] == "architecture_contract_only"
+    assert boundaries[6]["execution_enabled"] is False
 
-    # Module 9 has active audit events + future safety guard contract
-    assert boundaries[9]["status"] == "implemented_with_future_guard_contract"
+    # Module 9 has active audit events + safety guard enforcement
+    assert boundaries[9]["status"] == "implemented"

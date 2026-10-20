@@ -1,4 +1,4 @@
-"""Architecture contract for Scientific Evidence & Causal Hypotheses (Milestone 02/05)."""
+"""Architecture contract and status for Scientific Evidence & Hypotheses (Boundary 8/9)."""
 
 from typing import Any, Protocol
 
@@ -25,16 +25,18 @@ class ScientificEvidenceLedgerProtocol(Protocol):
 
 
 def get_module_contract_status() -> dict[str, Any]:
-    """Return truthful implementation status for Milestone 01/05."""
+    """Return truthful implementation status for Milestone 02/05."""
     return {
         "module": "evidence",
         "boundary_number": 8,
-        "status": "architecture_contract_only",
+        "status": "implemented",
         "target_milestone": "02/05 — Causal Discovery & Hypothesis Generation Engine",
         "database_tables_provisioned": ["hypotheses", "evidence_records"],
-        "execution_enabled": False,
-        "notice": (
-            "Database tables (hypotheses, evidence_records) and contracts are migrated "
-            "and ready for Milestone 02/05 Causal Discovery Engine."
-        ),
+        "execution_enabled": True,
+        "capabilities": [
+            "Deterministic topology-grounded hypothesis generator",
+            "Explicit distinction between observational correlation and experimental evidence",
+            "Evidence-driven hypothesis support score revision",
+            "Immutable evidence linkage to trial correlation IDs",
+        ],
     }

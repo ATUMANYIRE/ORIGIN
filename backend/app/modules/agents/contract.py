@@ -1,4 +1,4 @@
-"""Architecture contract for Autonomous Scientific Agent Orchestration (Milestone 04/05)."""
+"""Architecture contract and status for Scientific Agent Orchestration (Boundary 7/9)."""
 
 from typing import Any, Protocol
 
@@ -14,7 +14,7 @@ class ScientificInvestigationTaskContract(BaseModel):
 
 
 class AgentOrchestratorProtocol(Protocol):
-    """Protocol for coordinating Observer, Theorist, and Experimenter agents."""
+    """Protocol for coordinating autonomous causal investigation loops."""
 
     async def dispatch_investigation(
         self, task: ScientificInvestigationTaskContract
@@ -23,16 +23,21 @@ class AgentOrchestratorProtocol(Protocol):
 
 
 def get_module_contract_status() -> dict[str, Any]:
-    """Return truthful implementation status for Milestone 01/05."""
+    """Return truthful implementation status for Milestone 02/05."""
     return {
         "module": "agents",
         "boundary_number": 7,
-        "status": "architecture_contract_only",
-        "target_milestone": "04/05 — Autonomous Scientific Research Agents",
-        "database_tables_provisioned": [],
-        "execution_enabled": False,
-        "notice": (
-            "Agent orchestration contracts are established in Milestone 01/05. "
-            "Multi-agent reasoning loops are scheduled for Milestone 04/05."
-        ),
+        "status": "implemented",
+        "target_milestone": "02/05 — Autonomous Causal Scientist & Reasoning Loop",
+        "database_tables_provisioned": ["investigations"],
+        "execution_enabled": True,
+        "capabilities": [
+            (
+                "Full lifecycle state machine (CREATED -> OBSERVING -> HYPOTHESIZING "
+                "-> PLANNING -> EXPERIMENTING -> EVALUATING -> CONCLUDED / INCONCLUSIVE)"
+            ),
+            "Bounded autonomous reasoning loop without requiring paid LLM APIs",
+            "Optional constrained ModelGatewayProtocol with topology & allowlist validation",
+            "Reproducible JSON & Markdown scientific report export",
+        ],
     }

@@ -27,7 +27,13 @@ ORIGIN_BACKEND_URL = os.getenv("ORIGIN_BACKEND_URL", "http://localhost:8000")
 LAB_SELF_URL = os.getenv("LAB_SELF_URL", "http://127.0.0.1:8099")
 LAB_SYSTEM_SLUG = "origin-synthetic-lab"
 
-LabProfile = Literal["normal", "payment_latency_spike", "db_lock_contention"]
+LabProfile = Literal[
+    "normal",
+    "payment_latency_spike",
+    "db_lock_contention",
+    "inventory_cpu_throttling",
+    "noisy_ambiguous_jitter",
+]
 
 
 class LabRuntimeConfig(BaseModel):
@@ -149,7 +155,7 @@ async def database_simulator_endpoint(
         "http_status": http_status,
         "duration_ms": measured_ms,
         "attributes_json": {
-            "lab.profile": _RUNTIME.profile,
+            "telemetry.environment": "synthetic-lab",
             "db.operation": op_name,
             "rpc.system": "sql",
         },
@@ -202,7 +208,7 @@ async def inventory_service_endpoint(
         "http_status": 200,
         "duration_ms": total_dur,
         "attributes_json": {
-            "lab.profile": _RUNTIME.profile,
+            "telemetry.environment": "synthetic-lab",
             "inventory.sku": payload.sku,
             "rpc.system": "http",
         },
@@ -250,7 +256,7 @@ async def payment_simulator_endpoint(
         "http_status": http_status,
         "duration_ms": total_dur,
         "attributes_json": {
-            "lab.profile": _RUNTIME.profile,
+            "telemetry.environment": "synthetic-lab",
             "payment.amount_usd": payload.amount_usd,
             "rpc.system": "http",
         },
@@ -338,7 +344,7 @@ async def checkout_service_endpoint(
         "http_status": http_status,
         "duration_ms": total_dur,
         "attributes_json": {
-            "lab.profile": _RUNTIME.profile,
+            "telemetry.environment": "synthetic-lab",
             "order.amount_usd": payload.amount_usd,
             "rpc.system": "http",
         },
@@ -398,7 +404,7 @@ async def api_gateway_endpoint(
         "http_status": gw_http_status,
         "duration_ms": gw_total_dur,
         "attributes_json": {
-            "lab.profile": _RUNTIME.profile,
+            "telemetry.environment": "synthetic-lab",
             "order.sku": payload.sku,
             "rpc.system": "http",
         },
@@ -419,7 +425,7 @@ async def api_gateway_endpoint(
                 "value": sp["duration_ms"],
                 "correlation_id": x_correlation_id,
                 "trace_id": x_trace_id,
-                "attributes_json": {"profile": _RUNTIME.profile, "operation": sp["operation_name"]},
+                "attributes_json": {"operation": sp["operation_name"]},
                 "observed_at": now_iso,
             }
         )
@@ -456,7 +462,7 @@ async def api_gateway_endpoint(
                 "value": round(sat, 2),
                 "correlation_id": x_correlation_id,
                 "trace_id": x_trace_id,
-                "attributes_json": {"profile": _RUNTIME.profile},
+                "attributes_json": {"telemetry.environment": "synthetic-lab"},
                 "observed_at": now_iso,
             }
         )

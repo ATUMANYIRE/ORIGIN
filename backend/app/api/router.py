@@ -1,35 +1,64 @@
-"""Unified REST + OTLP + SSE API Router for ORIGIN (Milestone 01/05)."""
+"""Unified REST + OTLP + SSE + Causal Investigation API Router for ORIGIN (Milestone 02/05)."""
 
 import asyncio
 import json
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import event_bus
+from app.db.models import (
+    EvidenceRecord,
+    ExperimentDefinition,
+    ExperimentRun,
+    HypothesisRecord,
+)
 from app.db.session import get_db
 from app.modules.agents.contract import get_module_contract_status as get_agents_status
+from app.modules.agents.investigator import AutonomousInvestigatorService
+from app.modules.agents.schemas import (
+    InvestigationCreateRequest,
+    InvestigationDetailRead,
+    InvestigationRead,
+)
 from app.modules.auth.dependencies import (
     AuthenticatedPrincipal,
     get_correlation_id,
     verify_api_key,
+    verify_benchmark_controller,
 )
-from app.modules.evidence.contract import get_module_contract_status as get_evidence_status
+from app.modules.evidence.contract import (
+    get_module_contract_status as get_evidence_status,
+)
+from app.modules.evidence.schemas import EvidenceRead, HypothesisRead
 from app.modules.experimentation.contract import (
     get_module_contract_status as get_experimentation_status,
 )
+from app.modules.experimentation.schemas import (
+    ExperimentDefinitionRead,
+    ExperimentRunRead,
+)
+from app.modules.laboratory.benchmark_controller import (
+    BenchmarkControllerService,
+    BenchmarkMatrixResponse,
+    BenchmarkRunRead,
+    BenchmarkScenarioRequest,
+)
 from app.modules.laboratory.orchestrator import (
+    ALLOWLISTED_INTERVENTIONS,
     LabExecutionResult,
     LabFaultState,
     LabProfileType,
     LabTransactionRequest,
+    PrivateLabGroundTruthState,
     SyntheticLabOrchestrator,
     get_lab_state,
+    get_private_ground_truth_for_evaluator,
     set_lab_profile,
 )
 from app.modules.registry.schemas import (
@@ -42,7 +71,11 @@ from app.modules.registry.schemas import (
     SystemRead,
 )
 from app.modules.registry.service import RegistryService
-from app.modules.safety.service import AuditEventRead, AuditService, SafetyEnvelopeContract
+from app.modules.safety.service import (
+    AuditEventRead,
+    AuditService,
+    SafetyEnvelopeContract,
+)
 from app.modules.simulation.contract import (
     get_module_contract_status as get_simulation_status,
 )
@@ -65,7 +98,7 @@ api_router = APIRouter(prefix="/api/v1")
 async def health_check(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Deep health check verifying database connectivity, Redis coordination, and lab state."""
+    """Deep health check verifying database connectivity, Redis, and public lab view."""
     db_ok = False
     try:
         await db.execute(text("SELECT 1"))
@@ -79,11 +112,12 @@ async def health_check(
         "status": "healthy" if db_ok else "degraded",
         "platform": "ORIGIN",
         "tagline": "Give software the ability to understand itself.",
-        "milestone": "01/05 — Foundation, Product Experience & Living System Intelligence",
+        "milestone": "02/05 — Autonomous Causal Scientist & Experimental Discovery Engine",
         "timestamp": datetime.now(UTC).isoformat(),
         "database_connected": db_ok,
         "redis": redis_info,
         "laboratory_profile": lab_state.profile,
+        "laboratory_blinded": lab_state.blinded,
     }
 
 
@@ -281,7 +315,7 @@ async def query_spans(
 
 @api_router.get("/telemetry/stream", tags=["telemetry"])
 async def stream_telemetry_events() -> StreamingResponse:
-    """Server-Sent Events (SSE) stream pushing live telemetry & topology updates."""
+    """Server-Sent Events (SSE) stream pushing live telemetry, topology, & investigation events."""
 
     async def event_generator() -> AsyncGenerator[str, None]:
         queue = event_bus.subscribe()
@@ -346,7 +380,7 @@ async def get_system_topology(
     tags=["laboratory"],
 )
 async def get_laboratory_status() -> LabFaultState:
-    """Inspect the active fault/degradation profile of the Synthetic Laboratory."""
+    """Inspect the public view of the Synthetic Laboratory (masks hidden faults when blinded)."""
     return get_lab_state()
 
 
@@ -361,8 +395,8 @@ async def update_laboratory_profile(
     principal: AuthenticatedPrincipal = Depends(verify_api_key),
     correlation_id: str = Depends(get_correlation_id),
 ) -> LabFaultState:
-    """Switch the Synthetic Laboratory between normal operation and performance degradation."""
-    state = set_lab_profile(profile)
+    """Switch the Synthetic Laboratory operating profile (unblinded operator mode)."""
+    state = set_lab_profile(profile, blinded=False)
     sys_id = await SyntheticLabOrchestrator.ensure_lab_registered(
         db, actor=principal.actor, correlation_id=correlation_id
     )
@@ -402,7 +436,299 @@ async def execute_laboratory_workload(
 
 
 # ---------------------------------------------------------------------------
-# Boundaries 5, 6, 7, 8 & 9: Safety Audit & Future Research Module Contracts
+# Boundaries 5, 7, 8: Autonomous Causal Investigations, Experiments & Evidence
+# ---------------------------------------------------------------------------
+
+
+@api_router.get("/experiments/interventions", tags=["experimentation"])
+async def list_allowlisted_interventions() -> dict[str, Any]:
+    """List allowlisted experimental interventions permitted in the Synthetic Laboratory."""
+    return {
+        "allowlisted_interventions": ALLOWLISTED_INTERVENTIONS,
+        "safety_policy": (
+            "Arbitrary shell commands and untrusted code execution are strictly prohibited. "
+            "Only allowlisted laboratory interventions may be scheduled."
+        ),
+    }
+
+
+@api_router.post(
+    "/investigations",
+    response_model=InvestigationDetailRead,
+    status_code=status.HTTP_201_CREATED,
+    tags=["investigations"],
+)
+async def create_investigation(
+    payload: InvestigationCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(verify_api_key),
+    correlation_id: str = Depends(get_correlation_id),
+) -> InvestigationDetailRead:
+    """Create a new autonomous scientific investigation and optionally run it immediately."""
+    inv = await AutonomousInvestigatorService.create_investigation(
+        db,
+        request=payload,
+        actor=principal.actor,
+        correlation_id=correlation_id,
+    )
+    if payload.auto_run:
+        return await AutonomousInvestigatorService.run_investigation(
+            db, inv.id, actor=principal.actor
+        )
+    return await AutonomousInvestigatorService.get_investigation_detail(db, inv.id)
+
+
+@api_router.get(
+    "/investigations",
+    response_model=list[InvestigationRead],
+    tags=["investigations"],
+)
+async def list_investigations(
+    system_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+) -> list[InvestigationRead]:
+    """List recent autonomous scientific investigations."""
+    return await AutonomousInvestigatorService.list_investigations(
+        db, system_id=system_id, limit=limit
+    )
+
+
+@api_router.get(
+    "/investigations/{investigation_id}",
+    response_model=InvestigationDetailRead,
+    tags=["investigations"],
+)
+async def get_investigation(
+    investigation_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> InvestigationDetailRead:
+    """Inspect an investigation including its hypotheses, experiments, runs, and evidence."""
+    return await AutonomousInvestigatorService.get_investigation_detail(
+        db, investigation_id
+    )
+
+
+@api_router.post(
+    "/investigations/{investigation_id}/start",
+    response_model=InvestigationDetailRead,
+    tags=["investigations"],
+)
+async def start_investigation(
+    investigation_id: str,
+    db: AsyncSession = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> InvestigationDetailRead:
+    """Start or resume an investigation that is in CREATED state."""
+    return await AutonomousInvestigatorService.run_investigation(
+        db, investigation_id, actor=principal.actor
+    )
+
+
+@api_router.post(
+    "/investigations/{investigation_id}/cancel",
+    response_model=InvestigationRead,
+    tags=["investigations"],
+)
+async def cancel_investigation(
+    investigation_id: str,
+    db: AsyncSession = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> InvestigationRead:
+    """Cancel an active or pending investigation."""
+    inv = await AutonomousInvestigatorService.cancel_investigation(
+        db, investigation_id, actor=principal.actor
+    )
+    return InvestigationRead.model_validate(inv)
+
+
+@api_router.get(
+    "/investigations/{investigation_id}/hypotheses",
+    response_model=list[HypothesisRead],
+    tags=["investigations"],
+)
+async def get_investigation_hypotheses(
+    investigation_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> list[HypothesisRead]:
+    """Retrieve competing causal hypotheses for an investigation."""
+    await AutonomousInvestigatorService.get_investigation_model(db, investigation_id)
+    rows = list(
+        (
+            await db.execute(
+                select(HypothesisRecord)
+                .where(HypothesisRecord.investigation_id == investigation_id)
+                .order_by(HypothesisRecord.confidence_score.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [HypothesisRead.model_validate(r) for r in rows]
+
+
+@api_router.get(
+    "/investigations/{investigation_id}/experiments",
+    tags=["investigations"],
+)
+async def get_investigation_experiments(
+    investigation_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Retrieve experiment plans and trial execution results for an investigation."""
+    await AutonomousInvestigatorService.get_investigation_model(db, investigation_id)
+    plans = list(
+        (
+            await db.execute(
+                select(ExperimentDefinition)
+                .where(ExperimentDefinition.investigation_id == investigation_id)
+                .order_by(ExperimentDefinition.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    runs = list(
+        (
+            await db.execute(
+                select(ExperimentRun)
+                .where(ExperimentRun.investigation_id == investigation_id)
+                .order_by(ExperimentRun.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "investigation_id": investigation_id,
+        "experiment_plans": [
+            ExperimentDefinitionRead.model_validate(p).model_dump(mode="json")
+            for p in plans
+        ],
+        "experiment_runs": [
+            ExperimentRunRead.model_validate(r).model_dump(mode="json") for r in runs
+        ],
+    }
+
+
+@api_router.get(
+    "/investigations/{investigation_id}/evidence",
+    response_model=list[EvidenceRead],
+    tags=["investigations"],
+)
+async def get_investigation_evidence(
+    investigation_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> list[EvidenceRead]:
+    """Inspect immutable scientific evidence records for an investigation."""
+    await AutonomousInvestigatorService.get_investigation_model(db, investigation_id)
+    rows = list(
+        (
+            await db.execute(
+                select(EvidenceRecord)
+                .where(EvidenceRecord.investigation_id == investigation_id)
+                .order_by(EvidenceRecord.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [EvidenceRead.model_validate(r) for r in rows]
+
+
+@api_router.get(
+    "/investigations/{investigation_id}/export",
+    tags=["investigations"],
+)
+async def export_investigation_report(
+    investigation_id: str,
+    format: Literal["markdown", "json"] = Query(default="markdown"),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Export a reproducible scientific investigation report in Markdown and JSON."""
+    return await AutonomousInvestigatorService.export_investigation_report(
+        db, investigation_id, report_format=format
+    )
+
+
+# ---------------------------------------------------------------------------
+# Protected Benchmark Controller & Hidden-Fault Evaluator Endpoints
+# (Requires X-Benchmark-Controller-Key; rejects Investigator credentials with 403)
+# ---------------------------------------------------------------------------
+
+
+@api_router.get(
+    "/benchmarks/ground-truth",
+    response_model=PrivateLabGroundTruthState,
+    tags=["benchmarks"],
+)
+async def inspect_private_ground_truth(
+    _controller: AuthenticatedPrincipal = Depends(verify_benchmark_controller),
+) -> PrivateLabGroundTruthState:
+    """Inspect private laboratory ground truth (Strictly restricted to Benchmark Controller)."""
+    return get_private_ground_truth_for_evaluator()
+
+
+@api_router.post(
+    "/benchmarks/stage-hidden-fault/{profile}",
+    tags=["benchmarks"],
+)
+async def stage_hidden_fault(
+    profile: LabProfileType,
+    _controller: AuthenticatedPrincipal = Depends(verify_benchmark_controller),
+) -> dict[str, Any]:
+    """Stage a hidden fault in blinded mode (Benchmark Controller only)."""
+    return BenchmarkControllerService.stage_blinded_hidden_fault(profile)
+
+
+@api_router.post(
+    "/benchmarks/run",
+    response_model=BenchmarkRunRead,
+    status_code=status.HTTP_201_CREATED,
+    tags=["benchmarks"],
+)
+async def run_single_benchmark(
+    payload: BenchmarkScenarioRequest,
+    db: AsyncSession = Depends(get_db),
+    _controller: AuthenticatedPrincipal = Depends(verify_benchmark_controller),
+) -> BenchmarkRunRead:
+    """Execute a blinded hidden-fault benchmark and evaluate Investigator conclusion."""
+    return await BenchmarkControllerService.run_single_benchmark(db, payload)
+
+
+@api_router.post(
+    "/benchmarks/matrix",
+    response_model=BenchmarkMatrixResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["benchmarks"],
+)
+async def run_benchmark_matrix(
+    random_seed: int = Query(default=2026, ge=1, le=999999),
+    db: AsyncSession = Depends(get_db),
+    _controller: AuthenticatedPrincipal = Depends(verify_benchmark_controller),
+) -> BenchmarkMatrixResponse:
+    """Execute the full 5-scenario hidden-fault benchmark matrix and return scores."""
+    return await BenchmarkControllerService.run_benchmark_matrix(
+        db, random_seed=random_seed
+    )
+
+
+@api_router.get(
+    "/benchmarks/runs",
+    response_model=list[BenchmarkRunRead],
+    tags=["benchmarks"],
+)
+async def list_benchmark_runs(
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    _controller: AuthenticatedPrincipal = Depends(verify_benchmark_controller),
+) -> list[BenchmarkRunRead]:
+    """List private benchmark evaluation runs (Benchmark Controller only)."""
+    return await BenchmarkControllerService.list_benchmark_runs(db, limit=limit)
+
+
+# ---------------------------------------------------------------------------
+# Safety Audit & Architectural Boundaries
 # ---------------------------------------------------------------------------
 
 
@@ -425,7 +751,7 @@ async def list_audit_events(
 async def list_module_boundaries() -> dict[str, Any]:
     """Return explicit implementation status across all 9 ORIGIN architectural boundaries."""
     return {
-        "milestone": "01/05 — Foundation, Product Experience & Living System Intelligence",
+        "milestone": "02/05 — Autonomous Causal Scientist & Experimental Discovery Engine",
         "boundaries": [
             {
                 "boundary_number": 1,
@@ -434,6 +760,7 @@ async def list_module_boundaries() -> dict[str, Any]:
                 "capabilities": [
                     "FastAPI REST + OTLP + SSE router",
                     "X-Origin-Key / Bearer authentication",
+                    "X-Benchmark-Controller-Key epistemic access separation",
                     "X-Correlation-ID request correlation",
                 ],
             },
@@ -476,10 +803,11 @@ async def list_module_boundaries() -> dict[str, Any]:
             {
                 "boundary_number": 9,
                 "module": "safety_and_audit",
-                "status": "implemented_with_future_guard_contract",
+                "status": "implemented",
                 "capabilities": [
-                    "Immutable audit_events persistence for all mutations",
-                    "SafetyEnvelopeContract specification for Milestone 03/05",
+                    "Immutable audit_events persistence for all mutations and experiments",
+                    "Allowlisted intervention validation & zero untrusted code execution",
+                    "SafetyEnvelopeContract enforcement",
                 ],
                 "default_safety_envelope": SafetyEnvelopeContract().model_dump(),
             },
