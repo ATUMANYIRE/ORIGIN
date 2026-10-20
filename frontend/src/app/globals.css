@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-ivory: #faf8f5;
+  --bg-surface: #ffffff;
+  --border-stone: #e4dfd7;
+  --text-navy: #0f1e36;
+  --text-slate: #475569;
+}
+
+body {
+  background-color: var(--bg-ivory);
+  color: var(--text-navy);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scientific grid background pattern */
+.scientific-grid {
+  background-image: radial-gradient(#d6cfc4 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* React Flow warm-white theme customization */
+.react-flow__attribution {
+  background: rgba(250, 248, 245, 0.85) !important;
+  font-size: 10px !important;
+  color: #64748b !important;
+}
+
+.react-flow__controls {
+  box-shadow: 0 1px 3px rgba(15, 30, 54, 0.08) !important;
+  border: 1px solid #e4dfd7 !important;
+  border-radius: 6px !important;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  background: #ffffff !important;
+  border-bottom: 1px solid #e4dfd7 !important;
+  fill: #0f1e36 !important;
+}
