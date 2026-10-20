@@ -1,0 +1,146 @@
+services:
+  origin-gateway:
+    image: nginx:1.27-alpine
+    container_name: origin-prod-gateway
+    restart: always
+    ports:
+      - "${PORT:-80}:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      origin-frontend:
+        condition: service_healthy
+      origin-backend:
+        condition: service_healthy
+    networks:
+      - origin_public_net
+      - origin_app_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz | grep OK || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  origin-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost}
+    container_name: origin-prod-frontend
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: "0.0.0.0"
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost}
+    expose:
+      - "3000"
+    networks:
+      - origin_app_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  origin-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: origin-prod-backend
+    restart: always
+    command: >
+      sh -c "alembic upgrade head &&
+             python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --proxy-headers --forwarded-allow-ips='*'"
+    depends_on:
+      origin-postgres:
+        condition: service_healthy
+      origin-redis:
+        condition: service_healthy
+      origin-lab:
+        condition: service_healthy
+    environment:
+      ORIGIN_ENV: production
+      ORIGIN_API_KEY: ${ORIGIN_API_KEY}
+      DATABASE_URL: postgresql+asyncpg://origin:${POSTGRES_PASSWORD}@origin-postgres:5432/origin
+      REDIS_URL: redis://:${REDIS_PASSWORD}@origin-redis:6379/0
+      LAB_CONTROLLER_URL: http://origin-lab:8099
+      LAB_AUTO_SEED: "true"
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost","http://localhost:80","http://localhost:3000"]}
+    expose:
+      - "8000"
+    networks:
+      - origin_app_net
+      - origin_internal_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  origin-lab:
+    build:
+      context: ./lab
+      dockerfile: Dockerfile
+    container_name: origin-prod-lab
+    restart: always
+    environment:
+      ORIGIN_BACKEND_URL: http://origin-backend:8000
+      LAB_SELF_URL: http://127.0.0.1:8099
+    expose:
+      - "8099"
+    networks:
+      - origin_internal_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8099/internal/lab/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  origin-postgres:
+    image: postgres:16-alpine
+    container_name: origin-prod-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: origin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: origin
+      POSTGRES_INITDB_ARGS: "--auth-c=scram-sha-256"
+    volumes:
+      - origin_prod_pgdata:/var/lib/postgresql/data
+    networks:
+      - origin_internal_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U origin -d origin"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  origin-redis:
+    image: redis:7-alpine
+    container_name: origin-prod-redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - origin_prod_redisdata:/data
+    networks:
+      - origin_internal_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  origin_prod_pgdata:
+  origin_prod_redisdata:
+
+networks:
+  origin_public_net:
+    driver: bridge
+  origin_app_net:
+    driver: bridge
+  origin_internal_net:
+    driver: bridge
+    internal: true
