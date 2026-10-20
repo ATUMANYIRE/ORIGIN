@@ -17,9 +17,7 @@ class SimulationScenarioContract(BaseModel):
 class SimulationEngineProtocol(Protocol):
     """Protocol for offline counterfactual simulation prior to live experimentation."""
 
-    async def run_counterfactual(
-        self, scenario: SimulationScenarioContract
-    ) -> dict[str, Any]:
+    async def run_counterfactual(self, scenario: SimulationScenarioContract) -> dict[str, Any]:
         """Simulate propagation across the observed dependency graph."""
 
 

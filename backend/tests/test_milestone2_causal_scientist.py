@@ -17,9 +17,7 @@ from app.modules.experimentation.engine import (
 )
 from app.modules.laboratory.orchestrator import get_lab_state, set_lab_profile
 
-BENCHMARK_HEADERS = {
-    "X-Benchmark-Controller-Key": "origin-private-benchmark-evaluator-key-2026"
-}
+BENCHMARK_HEADERS = {"X-Benchmark-Controller-Key": "origin-private-benchmark-evaluator-key-2026"}
 INVESTIGATOR_HEADERS = {"X-Origin-Key": "origin-dev-scientific-key-2026"}
 
 
@@ -227,9 +225,7 @@ async def test_investigation_lifecycle_grounded_hypotheses_and_evidence_linkage(
 
     # 13. Evidence linkage and report export
     evidence = inv["evidence_records"]
-    exp_evidence = [
-        e for e in evidence if e["evidence_type"] == "controlled_experiment"
-    ]
+    exp_evidence = [e for e in evidence if e["evidence_type"] == "controlled_experiment"]
     assert len(exp_evidence) >= 1
     assert exp_evidence[0]["experiment_run_id"] == winning_run["id"]
 

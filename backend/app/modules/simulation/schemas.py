@@ -61,9 +61,7 @@ class SimulationBranchCreateRequest(BaseModel):
 
     twin_model_id: str
     name: str = Field(default="Baseline Future Trajectory", min_length=2, max_length=200)
-    branch_type: Literal["baseline", "counterfactual", "hypothesis_test", "benchmark"] = (
-        "baseline"
-    )
+    branch_type: Literal["baseline", "counterfactual", "hypothesis_test", "benchmark"] = "baseline"
     parent_branch_id: str | None = None
     initial_snapshot_id: str | None = None
     investigation_id: str | None = None

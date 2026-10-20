@@ -209,14 +209,10 @@ class AutonomousInvestigatorService:
         reason: str = "Cancelled by operator request.",
     ) -> InvestigationRecord:
         """Request or finalize cancellation of an investigation."""
-        inv = await AutonomousInvestigatorService.get_investigation_model(
-            db, investigation_id
-        )
+        inv = await AutonomousInvestigatorService.get_investigation_model(db, investigation_id)
         inv.cancel_requested = True
         if inv.status not in ("CONCLUDED", "INCONCLUSIVE", "FAILED", "CANCELLED"):
-            await AutonomousInvestigatorService.transition_state(
-                db, inv, "CANCELLED", reason
-            )
+            await AutonomousInvestigatorService.transition_state(db, inv, "CANCELLED", reason)
             inv.completed_at = datetime.now(UTC)
             inv.conclusion_summary = f"Investigation cancelled: {reason}"
             await AuditService.record_event(
@@ -240,13 +236,9 @@ class AutonomousInvestigatorService:
     ) -> InvestigationDetailRead:
         """Execute the bounded autonomous scientific reasoning loop from start to conclusion."""
         async with _INVESTIGATION_SEMAPHORE:
-            inv = await AutonomousInvestigatorService.get_investigation_model(
-                db, investigation_id
-            )
+            inv = await AutonomousInvestigatorService.get_investigation_model(db, investigation_id)
             if inv.status in ("CONCLUDED", "INCONCLUSIVE", "FAILED", "CANCELLED"):
-                return await AutonomousInvestigatorService.get_investigation_detail(
-                    db, inv.id
-                )
+                return await AutonomousInvestigatorService.get_investigation_detail(db, inv.id)
 
             t_start = time.perf_counter()
             inv.started_at = datetime.now(UTC)
@@ -282,11 +274,7 @@ class AutonomousInvestigatorService:
                     baseline_traces.append(tr)
 
                 target_vals = [
-                    float(
-                        t.service_latencies_ms.get(
-                            inv.target_service_key, t.total_duration_ms
-                        )
-                    )
+                    float(t.service_latencies_ms.get(inv.target_service_key, t.total_duration_ms))
                     for t in baseline_traces
                 ]
                 baseline_mean = round(statistics.fmean(target_vals), 2)
@@ -327,9 +315,7 @@ class AutonomousInvestigatorService:
                         )
                     inv.completed_at = datetime.now(UTC)
                     await db.commit()
-                    return await AutonomousInvestigatorService.get_investigation_detail(
-                        db, inv.id
-                    )
+                    return await AutonomousInvestigatorService.get_investigation_detail(db, inv.id)
 
                 # ---------------------------------------------------------------
                 # Phase 2: HYPOTHESIZING
@@ -340,15 +326,13 @@ class AutonomousInvestigatorService:
                     "HYPOTHESIZING",
                     "Synthesizing competing causal hypotheses from topology and telemetry.",
                 )
-                hypotheses, _obs_ev = (
-                    await HypothesisEngine.generate_competing_hypotheses(
-                        db,
-                        system_id=inv.system_id,
-                        investigation_id=inv.id,
-                        target_service_key=inv.target_service_key,
-                        target_metric=inv.target_metric,
-                        topology=topology,
-                    )
+                hypotheses, _obs_ev = await HypothesisEngine.generate_competing_hypotheses(
+                    db,
+                    system_id=inv.system_id,
+                    investigation_id=inv.id,
+                    target_service_key=inv.target_service_key,
+                    target_metric=inv.target_metric,
+                    topology=topology,
                 )
                 await AutonomousInvestigatorService.record_decision(
                     db,
@@ -385,9 +369,7 @@ class AutonomousInvestigatorService:
                     )
                     inv.completed_at = datetime.now(UTC)
                     await db.commit()
-                    return await AutonomousInvestigatorService.get_investigation_detail(
-                        db, inv.id
-                    )
+                    return await AutonomousInvestigatorService.get_investigation_detail(db, inv.id)
 
                 # ---------------------------------------------------------------
                 # Phases 3-5 Iterative Loop: PLANNING -> EXPERIMENTING -> EVALUATING
@@ -434,9 +416,7 @@ class AutonomousInvestigatorService:
                         "select_experiment",
                         sel_reason,
                         {
-                            "selected_hypothesis_id": (
-                                selected_hyp.id if selected_hyp else None
-                            ),
+                            "selected_hypothesis_id": (selected_hyp.id if selected_hyp else None),
                             "selection_score": sel_score,
                             "remaining_budget": remaining_budget,
                         },
@@ -457,19 +437,21 @@ class AutonomousInvestigatorService:
                         ),
                     )
                     exp_seed = inv.random_seed + (inv.experiments_used + 1) * 31
-                    exp_def, exp_run, stats_summary = (
-                        await ExperimentEngine.plan_and_execute_experiment(
-                            db,
-                            system_id=inv.system_id,
-                            investigation_id=inv.id,
-                            hypothesis=selected_hyp,
-                            sample_size_per_arm=inv.sample_size_per_arm,
-                            random_seed=exp_seed,
-                            selection_score=sel_score,
-                            selection_reason=sel_reason,
-                            actor=actor,
-                            check_cancel_fn=_is_cancelled_or_timed_out,
-                        )
+                    (
+                        exp_def,
+                        exp_run,
+                        stats_summary,
+                    ) = await ExperimentEngine.plan_and_execute_experiment(
+                        db,
+                        system_id=inv.system_id,
+                        investigation_id=inv.id,
+                        hypothesis=selected_hyp,
+                        sample_size_per_arm=inv.sample_size_per_arm,
+                        random_seed=exp_seed,
+                        selection_score=sel_score,
+                        selection_reason=sel_reason,
+                        actor=actor,
+                        check_cancel_fn=_is_cancelled_or_timed_out,
                     )
 
                     if exp_run.status == "cancelled" or await _is_cancelled_or_timed_out():
@@ -499,13 +481,11 @@ class AutonomousInvestigatorService:
                             f"and updating hypothesis ledger."
                         ),
                     )
-                    updated_hyp, ev_rec = (
-                        await HypothesisEngine.revise_hypothesis_from_experiment(
-                            db,
-                            hypothesis=selected_hyp,
-                            experiment_run_id=exp_run.id,
-                            stats_summary=stats_summary,
-                        )
+                    updated_hyp, ev_rec = await HypothesisEngine.revise_hypothesis_from_experiment(
+                        db,
+                        hypothesis=selected_hyp,
+                        experiment_run_id=exp_run.id,
+                        stats_summary=stats_summary,
                     )
                     await AutonomousInvestigatorService.record_decision(
                         db,
@@ -534,9 +514,7 @@ class AutonomousInvestigatorService:
                 # Phase 6: Final Conclusion vs Inconclusive Determination
                 # ---------------------------------------------------------------
                 if supported_hypothesis is not None:
-                    inv.concluded_cause_service_key = (
-                        supported_hypothesis.root_cause_service_key
-                    )
+                    inv.concluded_cause_service_key = supported_hypothesis.root_cause_service_key
                     inv.concluded_mechanism = supported_hypothesis.suspected_mechanism
                     inv.conclusion_summary = (
                         f"Concluded Root Cause: '{supported_hypothesis.root_cause_service_key}' "
@@ -628,9 +606,7 @@ class AutonomousInvestigatorService:
                         "concluded_mechanism": inv.concluded_mechanism,
                     },
                 )
-                return await AutonomousInvestigatorService.get_investigation_detail(
-                    db, inv.id
-                )
+                return await AutonomousInvestigatorService.get_investigation_detail(db, inv.id)
 
             except Exception as exc:
                 inv.status = "FAILED"
@@ -644,9 +620,7 @@ class AutonomousInvestigatorService:
         db: AsyncSession, investigation_id: str
     ) -> InvestigationRecord:
         """Fetch an InvestigationRecord by ID or raise 404."""
-        stmt = select(InvestigationRecord).where(
-            InvestigationRecord.id == investigation_id
-        )
+        stmt = select(InvestigationRecord).where(InvestigationRecord.id == investigation_id)
         inv = (await db.execute(stmt)).scalar_one_or_none()
         if inv is None:
             raise HTTPException(
@@ -663,9 +637,7 @@ class AutonomousInvestigatorService:
     ) -> list[InvestigationRead]:
         """List recent investigations ordered newest first."""
         stmt = (
-            select(InvestigationRecord)
-            .order_by(InvestigationRecord.created_at.desc())
-            .limit(limit)
+            select(InvestigationRecord).order_by(InvestigationRecord.created_at.desc()).limit(limit)
         )
         if system_id:
             stmt = stmt.where(InvestigationRecord.system_id == system_id)
@@ -677,9 +649,7 @@ class AutonomousInvestigatorService:
         db: AsyncSession, investigation_id: str
     ) -> InvestigationDetailRead:
         """Fetch an investigation with all hypotheses, experiment plans, runs, and evidence."""
-        inv = await AutonomousInvestigatorService.get_investigation_model(
-            db, investigation_id
-        )
+        inv = await AutonomousInvestigatorService.get_investigation_model(db, investigation_id)
         hyps = list(
             (
                 await db.execute(
@@ -741,15 +711,11 @@ class AutonomousInvestigatorService:
         report_format: str = "markdown",
     ) -> dict[str, Any]:
         """Generate a reproducible scientific investigation report in Markdown and JSON."""
-        detail = await AutonomousInvestigatorService.get_investigation_detail(
-            db, investigation_id
-        )
+        detail = await AutonomousInvestigatorService.get_investigation_detail(db, investigation_id)
 
         base_mean = detail.baseline_summary_json.get("baseline_mean_ms", "N/A")
         base_max = detail.baseline_summary_json.get("baseline_max_ms", "N/A")
-        base_corrs = ", ".join(
-            detail.baseline_summary_json.get("correlation_ids", [])
-        )
+        base_corrs = ", ".join(detail.baseline_summary_json.get("correlation_ids", []))
         cause_svc = detail.concluded_cause_service_key or "Inconclusive / None"
         cause_mech = detail.concluded_mechanism or "Inconclusive / None"
 
@@ -819,8 +785,7 @@ class AutonomousInvestigatorService:
                 f"`{ms.get('treatment_std_ms')} ms` ($n={ms.get('treatment_n')}$)"
             )
             eff_summary = (
-                f"`{ms.get('absolute_effect_size_ms')} ms` "
-                f"(`{ms.get('relative_effect_pct')}%`)"
+                f"`{ms.get('absolute_effect_size_ms')} ms` (`{ms.get('relative_effect_pct')}%`)"
             )
             ci_summary = (
                 f"`[{ms.get('ci_lower_95_ms')}, {ms.get('ci_upper_95_ms')}] ms` "

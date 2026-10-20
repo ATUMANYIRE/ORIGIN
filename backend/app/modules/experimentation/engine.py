@@ -98,9 +98,7 @@ def compute_experiment_statistics(
 
     # Welch-Satterthwaite degrees of freedom
     num = ((var_t / n_t) + (var_c / n_c)) ** 2
-    den = (((var_t / n_t) ** 2) / max(1, n_t - 1)) + (
-        ((var_c / n_c) ** 2) / max(1, n_c - 1)
-    )
+    den = (((var_t / n_t) ** 2) / max(1, n_t - 1)) + (((var_c / n_c) ** 2) / max(1, n_c - 1))
     df = num / den if den > 1e-9 else float(n_c + n_t - 2)
 
     t_crit = _t_critical_95(df)
@@ -113,11 +111,7 @@ def compute_experiment_statistics(
     # Statistically and practically significant if 95% CI excludes 0, |t| >= 2.20,
     # and relative latency change is at least 25%
     ci_excludes_zero = (ci_upper < -20.0) or (ci_lower > 20.0)
-    is_significant = (
-        ci_excludes_zero
-        and abs(t_stat) >= 2.20
-        and abs(rel_effect_pct) >= 25.0
-    )
+    is_significant = ci_excludes_zero and abs(t_stat) >= 2.20 and abs(rel_effect_pct) >= 25.0
 
     return {
         "measurement_unit": measurement_unit,
@@ -205,8 +199,7 @@ class ExperimentEngine:
 
             disambiguation_bonus = (
                 0.08
-                if hyp.root_cause_service_key
-                in ("order-database-sim", "payment-simulator")
+                if hyp.root_cause_service_key in ("order-database-sim", "payment-simulator")
                 else 0.03
             )
             expected_gain = round(
@@ -242,9 +235,7 @@ class ExperimentEngine:
         check_cancel_fn: Any | None = None,
     ) -> tuple[ExperimentDefinition, ExperimentRun, dict[str, Any]]:
         """Create an ExperimentDefinition, execute seeded trials, and persist ExperimentRun."""
-        intervention = validate_allowlisted_intervention(
-            hypothesis.recommended_intervention
-        )
+        intervention = validate_allowlisted_intervention(hypothesis.recommended_intervention)
         envelope = SafetyEnvelopeContract()
 
         exp_def = ExperimentDefinition(
@@ -316,29 +307,21 @@ class ExperimentEngine:
                 return exp_def, exp_run, {}
 
             trial_seed = random_seed * 1000 + idx * 17 + (1 if arm == "treatment" else 0)
-            active_intervention: InterventionType = (
-                intervention if arm == "treatment" else "none"
-            )
+            active_intervention: InterventionType = intervention if arm == "treatment" else "none"
 
-            trace_summary = (
-                await SyntheticLabOrchestrator.execute_instrumented_transaction(
-                    db,
-                    profile=None,
-                    intervention=active_intervention,
-                    experiment_arm=arm,
-                    rng_seed=trial_seed,
-                )
+            trace_summary = await SyntheticLabOrchestrator.execute_instrumented_transaction(
+                db,
+                profile=None,
+                intervention=active_intervention,
+                experiment_arm=arm,
+                rng_seed=trial_seed,
             )
 
             target_val = float(
-                trace_summary.service_latencies_ms.get(
-                    target_svc, trace_summary.total_duration_ms
-                )
+                trace_summary.service_latencies_ms.get(target_svc, trace_summary.total_duration_ms)
             )
             focal_val = float(
-                trace_summary.service_latencies_ms.get(
-                    focal_svc, trace_summary.total_duration_ms
-                )
+                trace_summary.service_latencies_ms.get(focal_svc, trace_summary.total_duration_ms)
             )
 
             if arm == "control":
@@ -390,9 +373,7 @@ class ExperimentEngine:
                 "intervention": intervention,
                 "absolute_effect_size_ms": stats_summary["absolute_effect_size_ms"],
                 "relative_effect_pct": stats_summary["relative_effect_pct"],
-                "is_statistically_significant": stats_summary[
-                    "is_statistically_significant"
-                ],
+                "is_statistically_significant": stats_summary["is_statistically_significant"],
             },
         )
         await db.flush()

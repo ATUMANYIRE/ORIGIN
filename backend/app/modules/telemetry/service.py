@@ -51,9 +51,7 @@ def _extract_otlp_attributes(kv_list: list[OTLPKeyValue]) -> dict[str, Any]:
 
 def _sanitize_slug(raw: str, default: str = "unknown-service") -> str:
     """Ensure service or system slug adheres to strict lowercase alphanumeric-hyphen format."""
-    cleaned = "".join(ch if (ch.isalnum() or ch in "-_") else "-" for ch in raw.lower()).strip(
-        "-_"
-    )
+    cleaned = "".join(ch if (ch.isalnum() or ch in "-_") else "-" for ch in raw.lower()).strip("-_")
     return cleaned[:120] if len(cleaned) >= 2 else default
 
 
@@ -107,10 +105,10 @@ class TelemetryService:
 
         # Cache existing services for this system
         svc_rows = (
-            await db.execute(
-                select(ServiceRecord).where(ServiceRecord.system_id == system.id)
-            )
-        ).scalars().all()
+            (await db.execute(select(ServiceRecord).where(ServiceRecord.system_id == system.id)))
+            .scalars()
+            .all()
+        )
         service_map: dict[str, ServiceRecord] = {s.service_key: s for s in svc_rows}
 
         async def ensure_service_observed(
@@ -155,9 +153,7 @@ class TelemetryService:
         correlation_ids: set[str] = set()
 
         # 1. Map span_id -> service_key within the batch for parent service resolution
-        batch_span_service: dict[str, str] = {
-            sp.span_id: sp.service_key for sp in batch.spans
-        }
+        batch_span_service: dict[str, str] = {sp.span_id: sp.service_key for sp in batch.spans}
 
         observed_edges_updated = 0
 
@@ -204,10 +200,7 @@ class TelemetryService:
             db.add(span_model)
 
             # Update directed dependency ONLY when an actual parent->child call is observed
-            if (
-                resolved_parent_service
-                and resolved_parent_service != sp.service_key
-            ):
+            if resolved_parent_service and resolved_parent_service != sp.service_key:
                 await ensure_service_observed(resolved_parent_service)
                 dep_stmt = select(ServiceDependency).where(
                     ServiceDependency.system_id == system.id,
@@ -301,9 +294,7 @@ class TelemetryService:
                 str(res_attrs.get("origin.system.slug", default_system_slug)),
                 default=default_system_slug,
             )
-            service_key = _sanitize_slug(
-                str(res_attrs.get("service.name", "unknown-service"))
-            )
+            service_key = _sanitize_slug(str(res_attrs.get("service.name", "unknown-service")))
             is_synthetic = bool(res_attrs.get("origin.is_synthetic", True))
 
             batch = batches_by_system.get(sys_slug)
@@ -334,9 +325,7 @@ class TelemetryService:
                     )
                     corr_id = str(sp_attrs.get("origin.correlation_id", f"otlp-{sp.traceId[:16]}"))
                     parent_svc_raw = sp_attrs.get("origin.parent_service")
-                    parent_svc = (
-                        _sanitize_slug(str(parent_svc_raw)) if parent_svc_raw else None
-                    )
+                    parent_svc = _sanitize_slug(str(parent_svc_raw)) if parent_svc_raw else None
                     http_status = int(sp_attrs.get("http.status_code", 200))
                     status_code: Any = "ERROR" if http_status >= 500 else "OK"
                     if sp.status.get("code") in (2, "STATUS_CODE_ERROR", "ERROR"):
@@ -393,9 +382,7 @@ class TelemetryService:
                 str(res_attrs.get("origin.system.slug", default_system_slug)),
                 default=default_system_slug,
             )
-            service_key = _sanitize_slug(
-                str(res_attrs.get("service.name", "unknown-service"))
-            )
+            service_key = _sanitize_slug(str(res_attrs.get("service.name", "unknown-service")))
             is_synthetic = bool(res_attrs.get("origin.is_synthetic", True))
 
             batch = batches_by_system.get(sys_slug)

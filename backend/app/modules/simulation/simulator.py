@@ -379,9 +379,7 @@ class LivingDigitalTwinSimulator:
     def step(self, dt_sec: float = 1.0) -> dict[str, Any]:
         """Advance the simulation clock by `dt_sec` and compute physical state transitions."""
         if len(self.event_log) >= MAX_EVENTS_PER_RUN:
-            raise RuntimeError(
-                f"Simulation event count limit ({MAX_EVENTS_PER_RUN}) exceeded."
-            )
+            raise RuntimeError(f"Simulation event count limit ({MAX_EVENTS_PER_RUN}) exceeded.")
 
         next_clock = round(self.sim_clock_sec + dt_sec, 4)
         due_events = self.scheduler.pop_due_events(next_clock)
@@ -478,9 +476,8 @@ class LivingDigitalTwinSimulator:
                     downstream_lat_ms += 8.5
                     downstream_err_prob = max(downstream_err_prob, 0.095)
                 else:
-                    if (
-                        cb_state == "OPEN"
-                        and next_clock >= float(st.get("circuit_breaker_open_until_sec", 0.0))
+                    if cb_state == "OPEN" and next_clock >= float(
+                        st.get("circuit_breaker_open_until_sec", 0.0)
                     ):
                         cb_state = "CLOSED"
                         rec_ev = {
@@ -503,16 +500,13 @@ class LivingDigitalTwinSimulator:
             if svc_key == "order-database-sim" and lock_factor > 0.0:
                 db_conn_cap = max(10.0, float(cfg.get("db_connection_capacity", 48.0)))
                 # More upstream checkout replicas / concurrency increase concurrent lock contention!
-                upstream_concurrency_pressure = (
-                    (checkout_replicas / 2.0) * (checkout_conc_limit / 30.0)
+                upstream_concurrency_pressure = (checkout_replicas / 2.0) * (
+                    checkout_conc_limit / 30.0
                 )
                 lock_load_ratio = (arr_rps * upstream_concurrency_pressure) / db_conn_cap
                 if lock_load_ratio > 0.70:
                     db_lock_wait_ms = (
-                        base_lat
-                        * lock_factor
-                        * 18.0
-                        * ((lock_load_ratio - 0.55) ** 2)
+                        base_lat * lock_factor * 18.0 * ((lock_load_ratio - 0.55) ** 2)
                     )
                     if db_lock_wait_ms > 120.0 and self.step_index % 5 == 0:
                         lock_ev = {
@@ -534,12 +528,8 @@ class LivingDigitalTwinSimulator:
             # 3. Queue Dynamics & Concurrency Backpressure
             # Effective capacity degrades when downstream latency holds worker threads/connections
             thread_hold_sec = (base_lat + downstream_lat_ms + db_lock_wait_ms) / 1000.0
-            concurrency_bound_rps = (replicas * conc_limit) / max(
-                0.015, thread_hold_sec * 3.2
-            )
-            effective_service_rate_rps = max(
-                eff_cap * 0.25, min(eff_cap, concurrency_bound_rps)
-            )
+            concurrency_bound_rps = (replicas * conc_limit) / max(0.015, thread_hold_sec * 3.2)
+            effective_service_rate_rps = max(eff_cap * 0.25, min(eff_cap, concurrency_bound_rps))
 
             prev_q = float(st["queue_depth"])
             net_queue_rate = arr_rps - effective_service_rate_rps
@@ -581,13 +571,9 @@ class LivingDigitalTwinSimulator:
                 if mean_lat_ms > 420.0 and cb_state != "OPEN"
                 else 0.0
             )
-            total_err_prob = min(
-                0.85, base_err + overflow_err + timeout_err + downstream_err_prob
-            )
+            total_err_prob = min(0.85, base_err + overflow_err + timeout_err + downstream_err_prob)
 
-            throughput_rps = min(arr_rps, effective_service_rate_rps) * (
-                1.0 - total_err_prob * 0.5
-            )
+            throughput_rps = min(arr_rps, effective_service_rate_rps) * (1.0 - total_err_prob * 0.5)
 
             if saturation_pct >= 92.0 and self.step_index % 6 == 0:
                 sat_ev = {
@@ -624,9 +610,7 @@ class LivingDigitalTwinSimulator:
         self.sim_clock_sec = next_clock
         self.step_index += 1
 
-        gw_state = self.service_states.get(
-            "api-gateway", next(iter(self.service_states.values()))
-        )
+        gw_state = self.service_states.get("api-gateway", next(iter(self.service_states.values())))
         co_state = self.service_states.get("checkout-service", gw_state)
         total_q = sum(float(s["queue_depth"]) for s in self.service_states.values())
         max_sat = max(float(s["saturation_pct"]) for s in self.service_states.values())
@@ -757,9 +741,7 @@ def run_simulation_with_uncertainty(
 
     ensemble_means: list[float] = [float(summary["mean_latency_ms"])]
     ensemble_errs: list[float] = [float(summary["mean_error_rate_pct"])]
-    step_lat_samples: list[list[float]] = [
-        [float(f["system_mean_latency_ms"])] for f in trajectory
-    ]
+    step_lat_samples: list[list[float]] = [[float(f["system_mean_latency_ms"])] for f in trajectory]
 
     mc_count = max(1, min(20, monte_carlo_runs))
     for k in range(1, mc_count):

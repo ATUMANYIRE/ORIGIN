@@ -36,9 +36,7 @@ def upgrade() -> None:
         sa.Column("warnings_json", sa.JSON(), nullable=False),
         sa.Column("evidence_sources_json", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["system_id"], ["registered_systems.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["system_id"], ["registered_systems.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -79,12 +77,8 @@ def upgrade() -> None:
         sa.Column("validity_envelope_json", sa.JSON(), nullable=False),
         sa.Column("warnings_json", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["system_id"], ["registered_systems.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["twin_model_id"], ["digital_twin_models.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["system_id"], ["registered_systems.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["twin_model_id"], ["digital_twin_models.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -112,12 +106,8 @@ def upgrade() -> None:
         sa.Column("service_states_json", sa.JSON(), nullable=False),
         sa.Column("active_interventions_json", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["system_id"], ["registered_systems.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["twin_model_id"], ["digital_twin_models.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["system_id"], ["registered_systems.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["twin_model_id"], ["digital_twin_models.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -157,12 +147,8 @@ def upgrade() -> None:
         sa.Column("uncertainty_json", sa.JSON(), nullable=False),
         sa.Column("warnings_json", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["system_id"], ["registered_systems.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["twin_model_id"], ["digital_twin_models.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["system_id"], ["registered_systems.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["twin_model_id"], ["digital_twin_models.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["initial_snapshot_id"], ["simulation_snapshots.id"], ondelete="SET NULL"
         ),
@@ -204,9 +190,7 @@ def upgrade() -> None:
         sa.Column("validation_metrics_json", sa.JSON(), nullable=False),
         sa.Column("provenance_json", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["system_id"], ["registered_systems.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["system_id"], ["registered_systems.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

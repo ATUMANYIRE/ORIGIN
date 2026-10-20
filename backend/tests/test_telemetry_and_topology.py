@@ -188,9 +188,7 @@ async def test_otlp_ingestion_and_strict_topology_provenance(client: AsyncClient
                                             "attributes": [
                                                 {
                                                     "key": "origin.correlation_id",
-                                                    "value": {
-                                                        "stringValue": "corr-otlp-99"
-                                                    },
+                                                    "value": {"stringValue": "corr-otlp-99"},
                                                 }
                                             ],
                                         }

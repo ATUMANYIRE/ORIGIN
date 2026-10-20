@@ -200,9 +200,7 @@ def upgrade() -> None:
     )
     op.add_column(
         "hypotheses",
-        sa.Column(
-            "alternative_explanations_json", sa.JSON(), nullable=False, server_default="[]"
-        ),
+        sa.Column("alternative_explanations_json", sa.JSON(), nullable=False, server_default="[]"),
     )
     op.add_column(
         "hypotheses",

@@ -73,9 +73,7 @@ class RegistryService:
         return system
 
     @staticmethod
-    async def get_system_by_id_or_slug(
-        db: AsyncSession, identifier: str
-    ) -> RegisteredSystem:
+    async def get_system_by_id_or_slug(db: AsyncSession, identifier: str) -> RegisteredSystem:
         """Look up a system by UUID or slug."""
         stmt = select(RegisteredSystem).where(
             (RegisteredSystem.id == identifier) | (RegisteredSystem.slug == identifier)
@@ -89,15 +87,11 @@ class RegistryService:
         return system
 
     @staticmethod
-    async def compute_system_stats(
-        db: AsyncSession, system_id: str
-    ) -> SystemSummaryStats:
+    async def compute_system_stats(db: AsyncSession, system_id: str) -> SystemSummaryStats:
         """Compute exact live operational counts from persistent database tables."""
         svc_count = (
             await db.execute(
-                select(func.count(ServiceRecord.id)).where(
-                    ServiceRecord.system_id == system_id
-                )
+                select(func.count(ServiceRecord.id)).where(ServiceRecord.system_id == system_id)
             )
         ).scalar_one()
 
@@ -131,9 +125,7 @@ class RegistryService:
             await db.execute(
                 select(func.count(ServiceDependency.id)).where(
                     ServiceDependency.system_id == system_id,
-                    ServiceDependency.discovery_source.in_(
-                        ["observed", "registered_and_observed"]
-                    ),
+                    ServiceDependency.discovery_source.in_(["observed", "registered_and_observed"]),
                 )
             )
         ).scalar_one()
@@ -148,17 +140,13 @@ class RegistryService:
 
         span_count = (
             await db.execute(
-                select(func.count(SpanObservation.id)).where(
-                    SpanObservation.system_id == system_id
-                )
+                select(func.count(SpanObservation.id)).where(SpanObservation.system_id == system_id)
             )
         ).scalar_one()
 
         source_count = (
             await db.execute(
-                select(func.count(TelemetrySource.id)).where(
-                    TelemetrySource.system_id == system_id
-                )
+                select(func.count(TelemetrySource.id)).where(TelemetrySource.system_id == system_id)
             )
         ).scalar_one()
 
@@ -187,9 +175,7 @@ class RegistryService:
         return results
 
     @staticmethod
-    async def get_system_detail(
-        db: AsyncSession, identifier: str
-    ) -> SystemDetailRead:
+    async def get_system_detail(db: AsyncSession, identifier: str) -> SystemDetailRead:
         """Retrieve a system along with its services, dependencies, and telemetry sources."""
         system = await RegistryService.get_system_by_id_or_slug(db, identifier)
         stats = await RegistryService.compute_system_stats(db, system.id)

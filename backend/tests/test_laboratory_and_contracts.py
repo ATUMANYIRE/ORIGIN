@@ -29,20 +29,14 @@ async def test_synthetic_laboratory_normal_and_degraded_execution(
 
     # Verify topology after normal traffic:
     # 4 edges are 'registered_and_observed', and 1 edge is 'observed'
-    topo_norm = (
-        await client.get("/api/v1/systems/origin-synthetic-lab/topology")
-    ).json()
+    topo_norm = (await client.get("/api/v1/systems/origin-synthetic-lab/topology")).json()
     assert topo_norm["total_nodes"] == 5
     assert topo_norm["total_edges"] == 5
     assert topo_norm["verified_edges"] == 5
     edge_map = {e["id"]: e for e in topo_norm["edges"]}
+    assert edge_map["inventory-service->order-database-sim"]["discovery_source"] == "observed"
     assert (
-        edge_map["inventory-service->order-database-sim"]["discovery_source"]
-        == "observed"
-    )
-    assert (
-        edge_map["api-gateway->checkout-service"]["discovery_source"]
-        == "registered_and_observed"
+        edge_map["api-gateway->checkout-service"]["discovery_source"] == "registered_and_observed"
     )
 
     # 2. Switch to payment_latency_spike degradation profile and run workload
@@ -65,9 +59,7 @@ async def test_synthetic_laboratory_normal_and_degraded_execution(
     assert pay_metrics["max_value"] > 350.0
 
     # Verify topology marks payment-simulator and upstream checkout-service as degraded/critical
-    topo_deg = (
-        await client.get("/api/v1/systems/origin-synthetic-lab/topology")
-    ).json()
+    topo_deg = (await client.get("/api/v1/systems/origin-synthetic-lab/topology")).json()
     node_health = {n["service_key"]: n["health_status"] for n in topo_deg["nodes"]}
     assert node_health["payment-simulator"] in ("degraded", "critical")
     assert node_health["checkout-service"] in ("degraded", "critical")

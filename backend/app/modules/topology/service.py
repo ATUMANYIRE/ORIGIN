@@ -126,9 +126,7 @@ class TopologyService:
                 if svc_spans:
                     durations = sorted(s.duration_ms for s in svc_spans)
                     err_count = sum(
-                        1
-                        for s in svc_spans
-                        if s.status_code == "ERROR" or s.http_status >= 500
+                        1 for s in svc_spans if s.status_code == "ERROR" or s.http_status >= 500
                     )
                     p95_idx = min(
                         len(durations) - 1,
@@ -142,9 +140,7 @@ class TopologyService:
                     recent_window = svc_spans[:15]
                     win_durations = sorted(s.duration_ms for s in recent_window)
                     win_err = sum(
-                        1
-                        for s in recent_window
-                        if s.status_code == "ERROR" or s.http_status >= 500
+                        1 for s in recent_window if s.status_code == "ERROR" or s.http_status >= 500
                     )
                     win_err_rate = (win_err / len(recent_window)) * 100.0
                     win_p95 = win_durations[
@@ -227,9 +223,7 @@ class TopologyService:
                     error_count=dep.error_count,
                     error_rate_pct=err_pct,
                     last_latency_ms=(
-                        round(dep.last_latency_ms, 2)
-                        if dep.last_latency_ms is not None
-                        else None
+                        round(dep.last_latency_ms, 2) if dep.last_latency_ms is not None else None
                     ),
                     last_observed_at=dep.last_observed_at,
                 )

@@ -19,9 +19,7 @@ class Settings(BaseSettings):
     origin_env: Literal["development", "test", "production"] = Field(
         default="development", alias="ORIGIN_ENV"
     )
-    origin_api_key: str = Field(
-        default="origin-dev-scientific-key-2026", alias="ORIGIN_API_KEY"
-    )
+    origin_api_key: str = Field(default="origin-dev-scientific-key-2026", alias="ORIGIN_API_KEY")
     origin_benchmark_controller_key: str = Field(
         default="origin-private-benchmark-evaluator-key-2026",
         alias="ORIGIN_BENCHMARK_CONTROLLER_KEY",

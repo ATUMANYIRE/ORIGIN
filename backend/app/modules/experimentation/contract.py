@@ -20,9 +20,7 @@ class ExperimentProposalContract(BaseModel):
 class ExperimentEngineProtocol(Protocol):
     """Protocol implemented in Milestone 02/05 (Controlled Experimentation Engine)."""
 
-    async def schedule_experiment(
-        self, proposal: ExperimentProposalContract
-    ) -> dict[str, Any]:
+    async def schedule_experiment(self, proposal: ExperimentProposalContract) -> dict[str, Any]:
         """Schedule a bounded experiment within a safety envelope."""
 
 

@@ -59,9 +59,7 @@ class DigitalTwinService:
         correlation_id: str | None = None,
     ) -> dict[str, Any]:
         """Calibrate a new versioned Digital Twin model from stored telemetry and experiments."""
-        twin_rec, cal_rec = await TwinCalibrationEngine.calibrate_from_evidence(
-            db, request
-        )
+        twin_rec, cal_rec = await TwinCalibrationEngine.calibrate_from_evidence(db, request)
         await AuditService.record_event(
             db,
             system_id=twin_rec.system_id,
@@ -89,12 +87,8 @@ class DigitalTwinService:
             },
         )
         return {
-            "twin_model": DigitalTwinModelRead.model_validate(twin_rec).model_dump(
-                mode="json"
-            ),
-            "calibration_run": CalibrationRunRead.model_validate(cal_rec).model_dump(
-                mode="json"
-            ),
+            "twin_model": DigitalTwinModelRead.model_validate(twin_rec).model_dump(mode="json"),
+            "calibration_run": CalibrationRunRead.model_validate(cal_rec).model_dump(mode="json"),
         }
 
     @staticmethod
@@ -104,9 +98,7 @@ class DigitalTwinService:
         limit: int = 50,
     ) -> list[DigitalTwinModelRead]:
         """List calibrated Digital Twin models ordered by newest first."""
-        stmt = select(DigitalTwinModelRecord).order_by(
-            DigitalTwinModelRecord.created_at.desc()
-        )
+        stmt = select(DigitalTwinModelRecord).order_by(DigitalTwinModelRecord.created_at.desc())
         if system_id:
             system = await RegistryService.get_system_by_id_or_slug(db, system_id)
             stmt = stmt.where(DigitalTwinModelRecord.system_id == system.id)
@@ -119,9 +111,7 @@ class DigitalTwinService:
         twin_model_id: str,
     ) -> DigitalTwinModelRecord:
         """Resolve a Digital Twin model record by ID or raise 404."""
-        stmt = select(DigitalTwinModelRecord).where(
-            DigitalTwinModelRecord.id == twin_model_id
-        )
+        stmt = select(DigitalTwinModelRecord).where(DigitalTwinModelRecord.id == twin_model_id)
         rec = (await db.execute(stmt)).scalar_one_or_none()
         if rec is None:
             raise HTTPException(
@@ -137,9 +127,7 @@ class DigitalTwinService:
         limit: int = 50,
     ) -> list[CalibrationRunRead]:
         """List calibration and held-out validation runs."""
-        stmt = select(CalibrationRunRecord).order_by(
-            CalibrationRunRecord.created_at.desc()
-        )
+        stmt = select(CalibrationRunRecord).order_by(CalibrationRunRecord.created_at.desc())
         if twin_model_id:
             stmt = stmt.where(CalibrationRunRecord.twin_model_id == twin_model_id)
         rows = list((await db.execute(stmt.limit(limit))).scalars().all())
@@ -151,9 +139,7 @@ class DigitalTwinService:
         request: SnapshotCreateRequest,
     ) -> SimulationSnapshotRead:
         """Create a serializable simulation state snapshot at t=0 or after `step_index` steps."""
-        twin = await DigitalTwinService.get_twin_model_record(
-            db, request.twin_model_id
-        )
+        twin = await DigitalTwinService.get_twin_model_record(db, request.twin_model_id)
         sim = LivingDigitalTwinSimulator(
             model_parameters=twin.parameters_json,
             random_seed=request.random_seed,
@@ -186,9 +172,7 @@ class DigitalTwinService:
         limit: int = 50,
     ) -> list[SimulationSnapshotRead]:
         """List saved simulation snapshots."""
-        stmt = select(SimulationSnapshotRecord).order_by(
-            SimulationSnapshotRecord.created_at.desc()
-        )
+        stmt = select(SimulationSnapshotRecord).order_by(SimulationSnapshotRecord.created_at.desc())
         if twin_model_id:
             stmt = stmt.where(SimulationSnapshotRecord.twin_model_id == twin_model_id)
         rows = list((await db.execute(stmt.limit(limit))).scalars().all())
@@ -200,9 +184,7 @@ class DigitalTwinService:
         snapshot_id: str,
     ) -> SimulationSnapshotRecord:
         """Retrieve a SimulationSnapshotRecord by ID or raise 404."""
-        stmt = select(SimulationSnapshotRecord).where(
-            SimulationSnapshotRecord.id == snapshot_id
-        )
+        stmt = select(SimulationSnapshotRecord).where(SimulationSnapshotRecord.id == snapshot_id)
         rec = (await db.execute(stmt)).scalar_one_or_none()
         if rec is None:
             raise HTTPException(
@@ -219,9 +201,7 @@ class DigitalTwinService:
         correlation_id: str | None = None,
     ) -> SimulationBranchRead:
         """Execute a baseline or counterfactual simulation branch from a model or snapshot."""
-        twin = await DigitalTwinService.get_twin_model_record(
-            db, request.twin_model_id
-        )
+        twin = await DigitalTwinService.get_twin_model_record(db, request.twin_model_id)
 
         # Enforce maximum branch limit per twin
         count_stmt = select(func.count(SimulationBranchRecord.id)).where(
@@ -261,9 +241,7 @@ class DigitalTwinService:
                 "rng_state_json": snap_rec.rng_state_json,
                 "pending_events_json": snap_rec.pending_events_json,
                 "service_states_json": deepcopy(snap_rec.service_states_json),
-                "active_interventions_json": deepcopy(
-                    snap_rec.active_interventions_json
-                ),
+                "active_interventions_json": deepcopy(snap_rec.active_interventions_json),
             }
             if request.incoming_traffic_rps is not None:
                 initial_snap_dict["service_states_json"]["current_parameters"][
@@ -288,18 +266,14 @@ class DigitalTwinService:
                 "rng_state_json": auto_snap.rng_state_json,
                 "pending_events_json": auto_snap.pending_events_json,
                 "service_states_json": deepcopy(auto_snap.service_states_json),
-                "active_interventions_json": deepcopy(
-                    auto_snap.active_interventions_json
-                ),
+                "active_interventions_json": deepcopy(auto_snap.active_interventions_json),
             }
             if request.incoming_traffic_rps is not None:
                 initial_snap_dict["service_states_json"]["current_parameters"][
                     "incoming_traffic_rps"
                 ] = request.incoming_traffic_rps
 
-        interventions_list = [
-            i.model_dump(mode="json") for i in request.interventions
-        ]
+        interventions_list = [i.model_dump(mode="json") for i in request.interventions]
         for iv in request.interventions:
             if iv.intervention_type == "increase_replicas" and iv.value > 8:
                 warnings.append(
@@ -308,17 +282,15 @@ class DigitalTwinService:
                 )
 
         try:
-            trajectory, event_log, summary, uncertainty = (
-                run_simulation_with_uncertainty(
-                    model_parameters=model_params,
-                    parameter_uncertainty=twin.parameter_uncertainty_json,
-                    interventions=interventions_list,
-                    initial_snapshot=initial_snap_dict,
-                    random_seed=request.random_seed,
-                    horizon_seconds=request.horizon_seconds,
-                    dt_seconds=request.dt_seconds,
-                    monte_carlo_runs=request.monte_carlo_runs,
-                )
+            trajectory, event_log, summary, uncertainty = run_simulation_with_uncertainty(
+                model_parameters=model_params,
+                parameter_uncertainty=twin.parameter_uncertainty_json,
+                interventions=interventions_list,
+                initial_snapshot=initial_snap_dict,
+                random_seed=request.random_seed,
+                horizon_seconds=request.horizon_seconds,
+                dt_seconds=request.dt_seconds,
+                monte_carlo_runs=request.monte_carlo_runs,
             )
         except ValueError as exc:
             raise HTTPException(
@@ -429,9 +401,7 @@ class DigitalTwinService:
         limit: int = 50,
     ) -> list[SimulationBranchRead]:
         """List simulation branches ordered by newest first."""
-        stmt = select(SimulationBranchRecord).order_by(
-            SimulationBranchRecord.created_at.desc()
-        )
+        stmt = select(SimulationBranchRecord).order_by(SimulationBranchRecord.created_at.desc())
         if twin_model_id:
             stmt = stmt.where(SimulationBranchRecord.twin_model_id == twin_model_id)
         if system_id:
@@ -446,9 +416,7 @@ class DigitalTwinService:
         branch_id: str,
     ) -> SimulationBranchRecord:
         """Retrieve a SimulationBranchRecord by ID or raise 404."""
-        stmt = select(SimulationBranchRecord).where(
-            SimulationBranchRecord.id == branch_id
-        )
+        stmt = select(SimulationBranchRecord).where(SimulationBranchRecord.id == branch_id)
         rec = (await db.execute(stmt)).scalar_one_or_none()
         if rec is None:
             raise HTTPException(
@@ -570,9 +538,7 @@ class DigitalTwinService:
         - experimental_evidence: Controlled intervention trials executed in the laboratory.
         - simulated_prediction: Digital Twin counterfactual projection under model assumptions.
         """
-        inv_stmt = select(InvestigationRecord).where(
-            InvestigationRecord.id == investigation_id
-        )
+        inv_stmt = select(InvestigationRecord).where(InvestigationRecord.id == investigation_id)
         inv = (await db.execute(inv_stmt)).scalar_one_or_none()
         if inv is None:
             raise HTTPException(
@@ -644,14 +610,10 @@ class DigitalTwinService:
             ),
         )
 
-        comparison = await DigitalTwinService.compare_branches(
-            db, base_branch.id, alt_branch.id
-        )
+        comparison = await DigitalTwinService.compare_branches(db, base_branch.id, alt_branch.id)
 
         # Gather real observed and experimental evidence from the investigation
-        ev_stmt = select(EvidenceRecord).where(
-            EvidenceRecord.investigation_id == investigation_id
-        )
+        ev_stmt = select(EvidenceRecord).where(EvidenceRecord.investigation_id == investigation_id)
         ev_rows = list((await db.execute(ev_stmt)).scalars().all())
         obs_ev = [
             {
@@ -715,14 +677,10 @@ class DigitalTwinService:
 
         comparison_data: dict[str, Any] | None = None
         if compare_with_branch_id:
-            comp = await DigitalTwinService.compare_branches(
-                db, compare_with_branch_id, branch_id
-            )
+            comp = await DigitalTwinService.compare_branches(db, compare_with_branch_id, branch_id)
             comparison_data = comp.model_dump(mode="json")
         elif branch.parent_branch_id:
-            comp = await DigitalTwinService.compare_branches(
-                db, branch.parent_branch_id, branch_id
-            )
+            comp = await DigitalTwinService.compare_branches(db, branch.parent_branch_id, branch_id)
             comparison_data = comp.model_dump(mode="json")
 
         cal_sum = twin.calibration_summary_json
@@ -791,12 +749,8 @@ class DigitalTwinService:
         markdown_text = "\n".join(lines)
         report_payload = {
             "epistemic_label": "counterfactual_prediction",
-            "branch": SimulationBranchRead.model_validate(branch).model_dump(
-                mode="json"
-            ),
-            "twin_model": DigitalTwinModelRead.model_validate(twin).model_dump(
-                mode="json"
-            ),
+            "branch": SimulationBranchRead.model_validate(branch).model_dump(mode="json"),
+            "twin_model": DigitalTwinModelRead.model_validate(twin).model_dump(mode="json"),
             "comparison": comparison_data,
         }
         return {
@@ -1106,11 +1060,10 @@ class DigitalTwinService:
                 ],
             ),
         )
-        pass_c = (
-            float(scale_c.outcome_summary_json["mean_latency_ms"])
-            < float(base_c.outcome_summary_json["mean_latency_ms"])
-            and float(ratelimit_c.outcome_summary_json["mean_throughput_rps"])
-            < float(scale_c.outcome_summary_json["mean_throughput_rps"])
+        pass_c = float(scale_c.outcome_summary_json["mean_latency_ms"]) < float(
+            base_c.outcome_summary_json["mean_latency_ms"]
+        ) and float(ratelimit_c.outcome_summary_json["mean_throughput_rps"]) < float(
+            scale_c.outcome_summary_json["mean_throughput_rps"]
         )
         results.append(
             SimulationBenchmarkScenarioResult(
@@ -1270,9 +1223,7 @@ class ScientificMemoryService:
             system = await RegistryService.get_system_by_id_or_slug(db, system_id)
             stmt = stmt.where(ScientificMemoryEntryRecord.system_id == system.id)
         if epistemic_kind:
-            stmt = stmt.where(
-                ScientificMemoryEntryRecord.epistemic_kind == epistemic_kind
-            )
+            stmt = stmt.where(ScientificMemoryEntryRecord.epistemic_kind == epistemic_kind)
         rows = list((await db.execute(stmt.limit(limit))).scalars().all())
         return [ScientificMemoryEntryRead.model_validate(r) for r in rows]
 
@@ -1325,9 +1276,7 @@ class ScientificMemoryService:
                 validation_metrics_json={},
                 provenance_json={
                     "epistemic_classification": "historical_observation",
-                    "correlation_ids": inv.baseline_summary_json.get(
-                        "correlation_ids", []
-                    ),
+                    "correlation_ids": inv.baseline_summary_json.get("correlation_ids", []),
                 },
             )
             db.add(obs_mem)

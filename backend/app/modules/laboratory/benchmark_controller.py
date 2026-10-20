@@ -58,9 +58,7 @@ EXPECTED_BENCHMARK_GROUND_TRUTH: dict[str, dict[str, str | None]] = {
 class BenchmarkScenarioRequest(BaseModel):
     """Request to run a blinded hidden-fault benchmark evaluation."""
 
-    scenario_name: str = Field(
-        default="Hidden Fault Benchmark", min_length=3, max_length=120
-    )
+    scenario_name: str = Field(default="Hidden Fault Benchmark", min_length=3, max_length=120)
     hidden_fault_profile: LabProfileType = "payment_latency_spike"
     target_service_key: str = Field(default="checkout-service")
     experiment_budget: int = Field(default=3, ge=1, le=6)
@@ -125,9 +123,7 @@ class BenchmarkControllerService:
     ) -> BenchmarkRunRead:
         """Stage a hidden fault in blinded mode, run the Investigator, and score the conclusion."""
         t0 = time.perf_counter()
-        await SyntheticLabOrchestrator.ensure_lab_registered(
-            db, actor="benchmark-controller"
-        )
+        await SyntheticLabOrchestrator.ensure_lab_registered(db, actor="benchmark-controller")
 
         # 1. Stage hidden fault in blinded mode
         set_lab_profile(request.hidden_fault_profile, blinded=True)
@@ -174,10 +170,7 @@ class BenchmarkControllerService:
 
             is_inconclusive = inv_detail.status == "INCONCLUSIVE"
             if expected_status == "INCONCLUSIVE":
-                is_correct = (
-                    is_inconclusive
-                    and inv_detail.concluded_cause_service_key is None
-                )
+                is_correct = is_inconclusive and inv_detail.concluded_cause_service_key is None
             else:
                 is_correct = (
                     inv_detail.status == "CONCLUDED"
@@ -185,9 +178,7 @@ class BenchmarkControllerService:
                     and inv_detail.concluded_mechanism == expected_mech
                 )
 
-            total_trials = sum(
-                len(r.trial_observations_json) for r in inv_detail.experiment_runs
-            )
+            total_trials = sum(len(r.trial_observations_json) for r in inv_detail.experiment_runs)
             evidence_ids = [e.id for e in inv_detail.evidence_records]
 
             record = BenchmarkRunRecord(
@@ -266,9 +257,7 @@ class BenchmarkControllerService:
     ) -> list[BenchmarkRunRead]:
         """List stored benchmark evaluations (Controller only)."""
         stmt = (
-            select(BenchmarkRunRecord)
-            .order_by(BenchmarkRunRecord.created_at.desc())
-            .limit(limit)
+            select(BenchmarkRunRecord).order_by(BenchmarkRunRecord.created_at.desc()).limit(limit)
         )
         rows = list((await db.execute(stmt)).scalars().all())
         return [BenchmarkRunRead.model_validate(r) for r in rows]

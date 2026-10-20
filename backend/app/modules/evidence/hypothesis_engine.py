@@ -231,11 +231,7 @@ class HypothesisEngine:
                     }
                 )
 
-            prior_pay = (
-                0.62
-                if pay_p95 > 250.0
-                else (0.42 if pay_p95 > pay_nom * 1.8 else 0.18)
-            )
+            prior_pay = 0.62 if pay_p95 > 250.0 else (0.42 if pay_p95 > pay_nom * 1.8 else 0.18)
             await _register_candidate(
                 root_service="payment-simulator",
                 mechanism="payment_gateway_latency_propagation",
@@ -465,9 +461,7 @@ class HypothesisEngine:
         is_sig = bool(stats_summary.get("is_statistically_significant", False))
         control_mean = float(stats_summary.get("control_mean_ms", 0.0))
         treatment_mean = float(stats_summary.get("treatment_mean_ms", 0.0))
-        total_n = int(stats_summary.get("control_n", 0)) + int(
-            stats_summary.get("treatment_n", 0)
-        )
+        total_n = int(stats_summary.get("control_n", 0)) + int(stats_summary.get("treatment_n", 0))
         trial_corrs: list[str] = list(stats_summary.get("trial_correlation_ids", []))
 
         # Note: For latency, a negative abs_effect_ms / rel_effect_pct means the treatment

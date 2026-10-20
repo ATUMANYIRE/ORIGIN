@@ -235,9 +235,7 @@ class TwinCalibrationEngine:
                 )
 
             if err_samples:
-                scfg["error_base_probability"] = round(
-                    max(0.001, statistics.fmean(err_samples)), 4
-                )
+                scfg["error_base_probability"] = round(max(0.001, statistics.fmean(err_samples)), 4)
 
             # Calibrate DB lock contention factor when order-database-sim is slow or saturated
             if svc_key == "order-database-sim":

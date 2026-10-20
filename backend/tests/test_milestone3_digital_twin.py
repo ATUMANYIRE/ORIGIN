@@ -75,9 +75,7 @@ async def test_branch_isolation_and_queue_resource_bounds() -> None:
     traj_fail, _, sum_fail = sim_fail.run_horizon(horizon_seconds=15.0, dt_seconds=1.0)
 
     # Re-run baseline from snap_0 to prove Branch 2 did not mutate snap_0 or base_params
-    sim_base_verify = LivingDigitalTwinSimulator(
-        model_parameters=base_params, random_seed=42
-    )
+    sim_base_verify = LivingDigitalTwinSimulator(model_parameters=base_params, random_seed=42)
     sim_base_verify.restore_from_snapshot_dict(snap_0)
     traj_base_2, _, _ = sim_base_verify.run_horizon(horizon_seconds=15.0, dt_seconds=1.0)
     assert traj_base == traj_base_2
@@ -348,9 +346,7 @@ async def test_persisted_snapshots_branches_cancellation_and_memory(
     )
     inv_data = inv_resp.json()
     inv_id = inv_data["id"]
-    evidence_before = (
-        await client.get(f"/api/v1/investigations/{inv_id}/evidence")
-    ).json()
+    evidence_before = (await client.get(f"/api/v1/investigations/{inv_id}/evidence")).json()
 
     sim_hyp_resp = await client.post(
         f"/api/v1/investigations/{inv_id}/simulate",
@@ -365,22 +361,12 @@ async def test_persisted_snapshots_branches_cancellation_and_memory(
     )
     assert sim_hyp_resp.status_code == 200
     sim_hyp = sim_hyp_resp.json()
-    assert (
-        sim_hyp["observed_evidence"]["epistemic_status"] == "historical_observation"
-    )
-    assert (
-        sim_hyp["experimental_evidence"]["epistemic_status"]
-        == "experimental_evidence"
-    )
-    assert (
-        sim_hyp["simulated_prediction"]["epistemic_status"]
-        == "counterfactual_prediction"
-    )
+    assert sim_hyp["observed_evidence"]["epistemic_status"] == "historical_observation"
+    assert sim_hyp["experimental_evidence"]["epistemic_status"] == "experimental_evidence"
+    assert sim_hyp["simulated_prediction"]["epistemic_status"] == "counterfactual_prediction"
 
     # 13. Verify historical evidence records of the investigation were not mutated by simulation!
-    evidence_after = (
-        await client.get(f"/api/v1/investigations/{inv_id}/evidence")
-    ).json()
+    evidence_after = (await client.get(f"/api/v1/investigations/{inv_id}/evidence")).json()
     assert evidence_before == evidence_after
 
     # Verify Scientific Memory queries

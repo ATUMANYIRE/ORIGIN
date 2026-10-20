@@ -18,9 +18,7 @@ class HypothesisSubmissionContract(BaseModel):
 class ScientificEvidenceLedgerProtocol(Protocol):
     """Protocol for causal discovery and evidence linking (Milestone 02/05)."""
 
-    async def register_hypothesis(
-        self, submission: HypothesisSubmissionContract
-    ) -> dict[str, Any]:
+    async def register_hypothesis(self, submission: HypothesisSubmissionContract) -> dict[str, Any]:
         """Record a causal hypothesis for falsification."""
 
 

@@ -62,9 +62,7 @@ async def verify_api_key(
 
 
 async def verify_benchmark_controller(
-    x_benchmark_key: str | None = Header(
-        default=None, alias="X-Benchmark-Controller-Key"
-    ),
+    x_benchmark_key: str | None = Header(default=None, alias="X-Benchmark-Controller-Key"),
     x_origin_api_key: str | None = Header(default=None, alias="X-Origin-Key"),
 ) -> AuthenticatedPrincipal:
     """Strictly verify Benchmark Controller credentials.
@@ -87,9 +85,7 @@ async def verify_benchmark_controller(
             detail="Missing X-Benchmark-Controller-Key header for Benchmark Controller.",
         )
 
-    if not secrets.compare_digest(
-        x_benchmark_key, settings.origin_benchmark_controller_key
-    ):
+    if not secrets.compare_digest(x_benchmark_key, settings.origin_benchmark_controller_key):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid X-Benchmark-Controller-Key.",
