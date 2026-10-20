@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("ORIGIN Milestone 01/05 Browser Smoke Verification", () => {
-  test("verifies live laboratory telemetry, topology explorer, and research contracts", async ({
+test.describe("ORIGIN Milestone 01/05 & 02/05 Browser Verification", () => {
+  test("verifies live laboratory telemetry, topology explorer, causal investigation scientist, and research contracts", async ({
     page,
   }) => {
+    test.setTimeout(90000);
     // 1. Visit Landing Page
     await page.goto("/");
     await expect(
@@ -61,13 +62,48 @@ test.describe("ORIGIN Milestone 01/05 Browser Smoke Verification", () => {
       page.getByTestId("span-row-checkout-service").first()
     ).toBeVisible();
 
-    // 5. Navigate to Future Research Contracts and verify honest contract-only labeling
+    // 5. Navigate to Causal Investigation Laboratory (/investigations) and launch an autonomous investigation
+    await page.goto("/investigations");
+    await expect(
+      page.getByRole("heading", {
+        name: "Causal Investigation Laboratory",
+      })
+    ).toBeVisible();
+
+    await page
+      .getByTestId("inv-fault-stage-select")
+      .selectOption("payment_latency_spike");
+    await page.locator("#inv-samples").fill("3");
+    await page.getByTestId("launch-investigation-btn").click();
+
+    await expect(page.getByTestId("active-investigation-detail")).toBeVisible({
+      timeout: 45000,
+    });
+    await expect(page.getByTestId("investigation-status-badge")).toHaveText(
+      "CONCLUDED",
+      { timeout: 45000 }
+    );
+    await expect(page.getByTestId("concluded-root-cause")).toHaveText(
+      "payment-simulator"
+    );
+    await expect(page.getByTestId("experiment-run-card-0")).toBeVisible();
+
+    // Open reproducible Markdown report modal
+    await page.getByTestId("export-markdown-btn").click();
+    await expect(page.getByTestId("scientific-report-markdown")).toContainText(
+      "# ORIGIN Scientific Investigation Report"
+    );
+
+    // 6. Navigate to Future Research Contracts and verify honest boundary status
     await page.goto("/research");
     await expect(
-      page.getByTestId("research-contract-experimentation")
-    ).toContainText("CONTRACT ONLY IN M01/05");
-    await expect(page.getByTestId("research-contract-evidence")).toContainText(
-      "CONTRACT ONLY IN M01/05"
-    );
+      page.getByTestId("research-contract-simulation")
+    ).toContainText("CONTRACT ONLY");
+    await expect(
+      page.getByTestId("implemented-module-experimentation")
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("implemented-module-evidence")
+    ).toBeVisible();
   });
 });

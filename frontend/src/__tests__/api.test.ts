@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatHypothesisStatusBadge,
   formatProvenanceBadge,
   groupMetricPointsByTimestamp,
 } from "../lib/api";
 import type { MetricPointRead } from "../lib/types";
 
-describe("ORIGIN Frontend Telemetry & Provenance Utilities", () => {
+describe("ORIGIN Frontend Telemetry, Provenance & Causal Hypothesis Utilities", () => {
   it("formats provenance badges accurately for registered, observed, and verified edges", () => {
     const verified = formatProvenanceBadge("registered_and_observed");
     expect(verified.label).toBe("VERIFIED (REG + OBS)");
@@ -15,6 +16,21 @@ describe("ORIGIN Frontend Telemetry & Provenance Utilities", () => {
 
     const registered = formatProvenanceBadge("registered");
     expect(registered.label).toBe("DECLARED ONLY");
+  });
+
+  it("formats causal hypothesis status badges accurately for experimental outcomes", () => {
+    expect(formatHypothesisStatusBadge("supported").label).toBe(
+      "SUPPORTED BY INTERVENTION"
+    );
+    expect(formatHypothesisStatusBadge("refuted").label).toBe(
+      "REFUTED BY INTERVENTION"
+    );
+    expect(formatHypothesisStatusBadge("inconclusive").label).toBe(
+      "INCONCLUSIVE EVIDENCE"
+    );
+    expect(formatHypothesisStatusBadge("proposed").label).toBe(
+      "OBSERVATIONAL CANDIDATE"
+    );
   });
 
   it("groups time-series metric observations by correlation window for Recharts", () => {

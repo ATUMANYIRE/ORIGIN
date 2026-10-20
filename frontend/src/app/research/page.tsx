@@ -37,10 +37,11 @@ export default function ResearchModulesPage() {
           </h1>
           <p className="text-xs text-slate-600 mt-1 max-w-3xl">
             ORIGIN enforces strict modular boundaries across 9 domain modules.
-            In Milestone 01/05, the Living System Intelligence Engine (Modules
-            1–4 and Safety Audit Log in Module 9) is fully implemented and
-            verified. Modules 5–8 expose explicit typed interfaces and database
-            schemas without pretending to execute unimplemented research loops.
+            Through Milestone 02/05, the Living System Intelligence Engine and
+            Autonomous Causal Scientist (Modules 1–5 and 7–9) are fully
+            implemented and verified. Module 6 (Digital Twin Simulation) exposes
+            an explicit typed contract without pretending to execute
+            unimplemented simulation loops.
           </p>
         </div>
 
@@ -110,6 +111,7 @@ export default function ResearchModulesPage() {
             {implemented.map((mod) => (
               <div
                 key={mod.boundary_number}
+                data-testid={`implemented-module-${mod.module}`}
                 className="bg-white border border-[#D6CFC4] rounded-md p-4 shadow-2xs space-y-2"
               >
                 <div className="flex items-center justify-between">

@@ -9,6 +9,7 @@ import {
   FlaskConical,
   GitBranch,
   Layers,
+  Microscope,
   Play,
   Radio,
   ShieldCheck,
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "System Matrix", icon: Layers },
   { href: "/topology", label: "Topology Explorer", icon: GitBranch },
   { href: "/telemetry", label: "Telemetry Workspace", icon: Activity },
+  { href: "/investigations", label: "Causal Scientist", icon: Microscope },
   {
     href: "/systems/origin-synthetic-lab",
     label: "System Detail & Registry",
@@ -50,7 +52,11 @@ export function AppShell({ children, onTelemetryEvent }: AppShellProps) {
 
   useEffect(() => {
     fetchLabStatus()
-      .then((st) => setActiveProfile(st.profile))
+      .then((st) => {
+        if (st.profile !== "blinded_benchmark_mode") {
+          setActiveProfile(st.profile);
+        }
+      })
       .catch(() => {
         /* ignore offline during static build */
       });
@@ -104,7 +110,9 @@ export function AppShell({ children, onTelemetryEvent }: AppShellProps) {
           iterations: 3,
           profile: targetProfile,
         });
-        setActiveProfile(res.active_profile);
+        if (res.active_profile !== "blinded_benchmark_mode") {
+          setActiveProfile(res.active_profile);
+        }
         const firstCorr = res.traces[0]?.correlation_id || "corr-verified";
         setLastTraceInfo(
           `+${res.total_spans_ingested} spans / +${res.total_metrics_ingested} metrics (${firstCorr})`
@@ -142,7 +150,7 @@ export function AppShell({ children, onTelemetryEvent }: AppShellProps) {
                     ORIGIN
                   </span>
                   <span className="text-[10px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#F3EFEA] border border-[#E4DFD7] text-slate-700">
-                    M01/05 · LIVING SYSTEM ENGINE
+                    M02/05 · CAUSAL SCIENTIST ENGINE
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 hidden sm:block leading-none mt-0.5">
@@ -198,6 +206,12 @@ export function AppShell({ children, onTelemetryEvent }: AppShellProps) {
                 </option>
                 <option value="db_lock_contention">
                   Lab: DB Lock Contention
+                </option>
+                <option value="inventory_cpu_throttling">
+                  Lab: Inventory CPU Starvation
+                </option>
+                <option value="noisy_ambiguous_jitter">
+                  Lab: Ambiguous Multi-Service Jitter
                 </option>
               </select>
               <button

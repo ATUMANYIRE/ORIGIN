@@ -1,6 +1,13 @@
 import type {
   AuditEventRead,
   DependencyRead,
+  EvidenceRead,
+  ExperimentDefinitionRead,
+  ExperimentRunRead,
+  HypothesisRead,
+  InvestigationCreatePayload,
+  InvestigationDetailRead,
+  InvestigationRead,
   LabExecutionResult,
   LabFaultState,
   LabProfileType,
@@ -39,7 +46,7 @@ export async function fetchHealth(): Promise<{
   tagline: string;
   milestone: string;
   database_connected: boolean;
-  laboratory_profile: LabProfileType;
+  laboratory_profile: LabProfileType | "blinded_benchmark_mode";
 }> {
   return apiFetch("/api/v1/health");
 }
@@ -153,6 +160,96 @@ export async function fetchArchitectureModules(): Promise<{
   return apiFetch("/api/v1/architecture/modules");
 }
 
+// ---------------------------------------------------------------------------
+// Milestone 02/05: Autonomous Causal Scientist & Investigation API Client
+// ---------------------------------------------------------------------------
+
+export async function createInvestigation(
+  payload: InvestigationCreatePayload
+): Promise<InvestigationDetailRead> {
+  return apiFetch("/api/v1/investigations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchInvestigations(
+  systemId?: string
+): Promise<InvestigationRead[]> {
+  const qs = systemId ? `?system_id=${encodeURIComponent(systemId)}` : "";
+  return apiFetch(`/api/v1/investigations${qs}`);
+}
+
+export async function fetchInvestigationDetail(
+  investigationId: string
+): Promise<InvestigationDetailRead> {
+  return apiFetch(
+    `/api/v1/investigations/${encodeURIComponent(investigationId)}`
+  );
+}
+
+export async function startInvestigation(
+  investigationId: string
+): Promise<InvestigationDetailRead> {
+  return apiFetch(
+    `/api/v1/investigations/${encodeURIComponent(investigationId)}/start`,
+    { method: "POST" }
+  );
+}
+
+export async function cancelInvestigation(
+  investigationId: string
+): Promise<InvestigationRead> {
+  return apiFetch(
+    `/api/v1/investigations/${encodeURIComponent(investigationId)}/cancel`,
+    { method: "POST" }
+  );
+}
+
+export async function fetchInvestigationHypotheses(
+  investigationId: string
+): Promise<HypothesisRead[]> {
+  return apiFetch(
+    `/api/v1/investigations/${encodeURIComponent(investigationId)}/hypotheses`
+  );
+}
+
+export async function fetchInvestigationExperiments(
+  investigationId: string
+): Promise<{
+  investigation_id: string;
+  experiment_plans: ExperimentDefinitionRead[];
+  experiment_runs: ExperimentRunRead[];
+}> {
+  return apiFetch(
+    `/api/v1/investigations/${encodeURIComponent(investigationId)}/experiments`
+  );
+}
+
+export async function fetchInvestigationEvidence(
+  investigationId: string
+): Promise<EvidenceRead[]> {
+  return apiFetch(
+    `/api/v1/investigations/${encodeURIComponent(investigationId)}/evidence`
+  );
+}
+
+export async function exportInvestigationReport(
+  investigationId: string,
+  format: "markdown" | "json" = "markdown"
+): Promise<{
+  investigation_id: string;
+  status: string;
+  markdown: string;
+  report: Record<string, unknown>;
+}> {
+  return apiFetch(
+    `/api/v1/investigations/${encodeURIComponent(
+      investigationId
+    )}/export?format=${format}`
+  );
+}
+
 export function formatProvenanceBadge(
   source: "registered" | "observed" | "registered_and_observed"
 ): { label: string; badgeClass: string; description: string } {
@@ -180,6 +277,38 @@ export function formatProvenanceBadge(
           "bg-slate-100 text-slate-700 border-slate-300",
         description:
           "Declared in system registry, awaiting confirmation from live span telemetry.",
+      };
+  }
+}
+
+export function formatHypothesisStatusBadge(
+  status: "proposed" | "testing" | "supported" | "refuted" | "inconclusive"
+): { label: string; badgeClass: string } {
+  switch (status) {
+    case "supported":
+      return {
+        label: "SUPPORTED BY INTERVENTION",
+        badgeClass: "bg-emerald-50 text-emerald-900 border-emerald-300",
+      };
+    case "refuted":
+      return {
+        label: "REFUTED BY INTERVENTION",
+        badgeClass: "bg-rose-50 text-rose-900 border-rose-300",
+      };
+    case "testing":
+      return {
+        label: "UNDER EXPERIMENTATION",
+        badgeClass: "bg-amber-50 text-amber-900 border-amber-300",
+      };
+    case "inconclusive":
+      return {
+        label: "INCONCLUSIVE EVIDENCE",
+        badgeClass: "bg-slate-100 text-slate-700 border-slate-300",
+      };
+    default:
+      return {
+        label: "OBSERVATIONAL CANDIDATE",
+        badgeClass: "bg-[#F3EFEA] text-[#0F1E36] border-[#E4DFD7]",
       };
   }
 }
