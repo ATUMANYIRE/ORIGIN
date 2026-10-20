@@ -31,6 +31,7 @@ interface AppShellProps {
 
 const NAV_ITEMS = [
   { href: "/", label: "Instrument Overview", icon: Sparkles },
+  { href: "/demo", label: "Guided Scientific Demo", icon: Play },
   { href: "/dashboard", label: "System Matrix", icon: Layers },
   { href: "/topology", label: "Topology Explorer", icon: GitBranch },
   { href: "/telemetry", label: "Telemetry Workspace", icon: Activity },
