@@ -1,0 +1,11 @@
+[project]
+name = "origin-synthetic-lab"
+version = "0.1.0"
+description = "ORIGIN Synthetic Distributed System Laboratory (API Gateway, Checkout, Inventory, Payment Simulator, DB Simulator, Load Generator)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.9.0",
+    "httpx>=0.27.2",
+]
