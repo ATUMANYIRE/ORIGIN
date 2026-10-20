@@ -1,0 +1,118 @@
+services:
+  origin-postgres:
+    image: postgres:16-alpine
+    container_name: origin-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: origin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-origin_password}
+      POSTGRES_DB: origin
+    ports:
+      - "127.0.0.1:5438:5432"
+    volumes:
+      - origin_pgdata:/var/lib/postgresql/data
+    networks:
+      - origin_internal_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U origin -d origin"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  origin-redis:
+    image: redis:7-alpine
+    container_name: origin-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6399:6379"
+    networks:
+      - origin_internal_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  origin-lab:
+    build:
+      context: ./lab
+      dockerfile: Dockerfile
+    container_name: origin-lab
+    restart: unless-stopped
+    environment:
+      ORIGIN_BACKEND_URL: http://origin-backend:8000
+      LAB_SELF_URL: http://127.0.0.1:8099
+    # Security requirement: Do NOT expose internal laboratory services publicly on host ports.
+    expose:
+      - "8099"
+    networks:
+      - origin_internal_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8099/internal/lab/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  origin-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: origin-backend
+    restart: unless-stopped
+    depends_on:
+      origin-postgres:
+        condition: service_healthy
+      origin-redis:
+        condition: service_healthy
+      origin-lab:
+        condition: service_healthy
+    environment:
+      ORIGIN_ENV: development
+      ORIGIN_API_KEY: ${ORIGIN_API_KEY:-origin-dev-scientific-key-2026}
+      DATABASE_URL: postgresql+asyncpg://origin:${POSTGRES_PASSWORD:-origin_password}@origin-postgres:5432/origin
+      REDIS_URL: redis://origin-redis:6379/0
+      LAB_CONTROLLER_URL: http://origin-lab:8099
+      LAB_AUTO_SEED: "true"
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      - origin_internal_net
+      - origin_public_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  origin-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    container_name: origin-frontend
+    restart: unless-stopped
+    depends_on:
+      origin-backend:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - origin_public_net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+networks:
+  origin_internal_net:
+    driver: bridge
+    internal: false
+  origin_public_net:
+    driver: bridge
+
+volumes:
+  origin_pgdata:
