@@ -2,9 +2,9 @@
 
 > **Tagline:** *Give software the ability to understand itself.*
 >
-> **Current Milestone:** `02/05` — Autonomous Causal Scientist & Experimental Discovery Engine
+> **Current Milestone:** `03/05` — Living Digital Twin, Counterfactual Intelligence & Scientific Memory
 
-ORIGIN is an autonomous scientific intelligence platform engineered to observe distributed software systems, construct provenance-verified topology graphs from live OpenTelemetry spans and metrics, formulate competing falsifiable causal hypotheses, and discover hidden root causes through seeded, block-randomized controlled experiments.
+ORIGIN is an autonomous scientific intelligence platform engineered to observe distributed software systems, construct provenance-verified topology graphs from live OpenTelemetry spans and metrics, formulate competing falsifiable causal hypotheses, discover hidden root causes through seeded block-randomized controlled experiments, and simulate counterfactual parallel futures inside a calibrated **Living Digital Twin** with persistent **Scientific Memory**.
 
 ---
 
@@ -73,6 +73,12 @@ npm run build
 - [`docs/SCIENTIFIC_EVIDENCE.md`](docs/SCIENTIFIC_EVIDENCE.md) — Welch's two-sample $t$-test, 95% confidence intervals, Cohen's $d$, and evidence ledger schema.
 - [`docs/BENCHMARK_RESULTS.md`](docs/BENCHMARK_RESULTS.md) — Epistemic blinding architecture and verified 5-scenario hidden-fault benchmark matrix results.
 - [`docs/INVESTIGATION_API.md`](docs/INVESTIGATION_API.md) — Complete REST API specification for `/api/v1/investigations/*` and `/api/v1/benchmarks/*`.
+- [`docs/DIGITAL_TWIN_ARCHITECTURE.md`](docs/DIGITAL_TWIN_ARCHITECTURE.md) — 10-layer Living Digital Twin architecture and epistemic classification discipline.
+- [`docs/SIMULATION_ENGINE.md`](docs/SIMULATION_ENGINE.md) — Governing queueing, concurrency, circuit-breaker, and DB lock contention equations + exact RNG/event snapshot rewind.
+- [`docs/MODEL_CALIBRATION.md`](docs/MODEL_CALIBRATION.md) — 75%/25% train vs. held-out validation calibration, intrinsic latency decomposition, and MAE/RMSE/NRMSE scoring.
+- [`docs/COUNTERFACTUAL_REASONING.md`](docs/COUNTERFACTUAL_REASONING.md) — Allowlisted counterfactual interventions, parallel futures comparison, and shared bottleneck detection.
+- [`docs/SCIENTIFIC_MEMORY.md`](docs/SCIENTIFIC_MEMORY.md) — Persistent institutional memory (`scientific_memory_entries`) and triple epistemic separation.
+- [`docs/SIMULATION_BENCHMARKS.md`](docs/SIMULATION_BENCHMARKS.md) — Canonical Digital Twin benchmarks A, B, C, and D.
 - [`docs/SECURITY.md`](docs/SECURITY.md) — Network isolation, API authentication, audit trail, and untrusted code prohibition.
 - [`docs/TESTING.md`](docs/TESTING.md) — Backend, migration, laboratory, frontend, and Playwright verification guides.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — 5-Milestone execution plan (`01/05` through `05/05`).
