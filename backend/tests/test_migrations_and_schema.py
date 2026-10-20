@@ -46,6 +46,13 @@ def test_alembic_upgrade_and_downgrade_cycle(tmp_path: Path) -> None:
         "simulation_snapshots",
         "simulation_branches",
         "scientific_memory_entries",
+        "recovery_plans",
+        "remediation_candidates",
+        "sandbox_verification_runs",
+        "recovery_approvals",
+        "recovery_executions",
+        "recovery_rollbacks",
+        "safety_policy_evaluations",
     }
     assert expected_tables.issubset(tables), f"Missing tables: {expected_tables - tables}"
 

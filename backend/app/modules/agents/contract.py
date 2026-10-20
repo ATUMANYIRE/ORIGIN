@@ -23,21 +23,39 @@ class AgentOrchestratorProtocol(Protocol):
 
 
 def get_module_contract_status() -> dict[str, Any]:
-    """Return truthful implementation status for Milestone 02/05."""
+    """Return truthful implementation status for Milestone 04/05."""
     return {
         "module": "agents",
         "boundary_number": 7,
         "status": "implemented",
-        "target_milestone": "02/05 — Autonomous Causal Scientist & Reasoning Loop",
-        "database_tables_provisioned": ["investigations"],
+        "target_milestone": "04/05 — Multi-Role Agent Orchestration & Autonomous Recovery",
+        "database_tables_provisioned": [
+            "investigations",
+            "recovery_plans",
+            "remediation_candidates",
+            "sandbox_verification_runs",
+            "recovery_approvals",
+            "recovery_executions",
+            "recovery_rollbacks",
+        ],
         "execution_enabled": True,
         "capabilities": [
             (
-                "Full lifecycle state machine (CREATED -> OBSERVING -> HYPOTHESIZING "
+                "8-Role Bounded Deterministic Agent Orchestrator (Observer, Investigator, "
+                "Simulator, RecoveryPlanner, Verifier, SafetyGovernor, "
+                "ExecutionController, EvidenceAuditor)"
+            ),
+            (
+                "Full investigation lifecycle (CREATED -> OBSERVING -> HYPOTHESIZING "
                 "-> PLANNING -> EXPERIMENTING -> EVALUATING -> CONCLUDED / INCONCLUSIVE)"
             ),
-            "Bounded autonomous reasoning loop without requiring paid LLM APIs",
+            (
+                "Full recovery lifecycle (DETECTED -> INVESTIGATING -> SIMULATING -> PROPOSING "
+                "-> SANDBOX_VERIFYING -> AWAITING_APPROVAL -> APPROVED -> EXECUTING -> OBSERVING "
+                "-> RECOVERED / ROLLED_BACK / REJECTED / FAILED / CANCELLED "
+                "/ MANUAL_INTERVENTION_REQUIRED)"
+            ),
             "Optional constrained ModelGatewayProtocol with topology & allowlist validation",
-            "Reproducible JSON & Markdown scientific report export",
+            "Reproducible JSON & Markdown scientific investigation and recovery report exports",
         ],
     }

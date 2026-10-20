@@ -190,6 +190,185 @@ class LabExecutionResult(BaseModel):
 # Private process-level state managed by Benchmark Controller / Lab Orchestrator
 _PRIVATE_STATE = PrivateLabGroundTruthState()
 
+ALLOWLISTED_REMEDIATION_ACTIONS: set[str] = {
+    "adjust_service_replicas",
+    "modify_concurrency_limit",
+    "toggle_circuit_breaker",
+    "apply_rate_limiting",
+    "adjust_db_contention_controls",
+    "restore_safe_lab_configuration",
+    "restart_synthetic_service",
+}
+
+
+class LabRuntimeConfiguration(BaseModel):
+    """Mutable, inspectable, and restorable runtime configuration of the Synthetic Laboratory."""
+
+    environment: str = "synthetic-lab"
+    service_replicas: dict[str, int] = Field(
+        default_factory=lambda: {
+            "api-gateway": 2,
+            "checkout-service": 2,
+            "inventory-service": 2,
+            "payment-simulator": 2,
+            "order-database-sim": 1,
+        }
+    )
+    concurrency_limits: dict[str, int] = Field(
+        default_factory=lambda: {
+            "api-gateway": 120,
+            "checkout-service": 30,
+            "inventory-service": 50,
+            "payment-simulator": 50,
+            "order-database-sim": 65,
+        }
+    )
+    circuit_breakers: dict[str, bool] = Field(
+        default_factory=lambda: {
+            "api-gateway": False,
+            "checkout-service": False,
+            "inventory-service": False,
+            "payment-simulator": False,
+            "order-database-sim": False,
+        }
+    )
+    rate_limit_factor: float = 1.0
+    db_connection_capacity: float = 65.0
+    db_lock_relief_enabled: bool = False
+    payment_fastpath_enabled: bool = False
+    restarted_services: list[str] = Field(default_factory=list)
+    regression_penalty_ms: float = 0.0
+    lab_unsafe_locked: bool = False
+    unsafe_reason: str | None = None
+
+
+_LAB_RUNTIME_CONFIG = LabRuntimeConfiguration()
+
+
+def capture_lab_configuration() -> dict[str, Any]:
+    """Capture a deep copy of the current laboratory runtime & fault configuration."""
+    return {
+        "runtime_config": _LAB_RUNTIME_CONFIG.model_copy(deep=True).model_dump(mode="json"),
+        "fault_state": _PRIVATE_STATE.model_copy(deep=True).model_dump(mode="json"),
+    }
+
+
+def is_lab_unsafe_locked() -> tuple[bool, str | None]:
+    """Return whether the laboratory is locked due to a failed sandbox restoration."""
+    return _LAB_RUNTIME_CONFIG.lab_unsafe_locked, _LAB_RUNTIME_CONFIG.unsafe_reason
+
+
+def mark_lab_unsafe(reason: str) -> None:
+    """Mark the laboratory unsafe and block further experiments until restored."""
+    _LAB_RUNTIME_CONFIG.lab_unsafe_locked = True
+    _LAB_RUNTIME_CONFIG.unsafe_reason = reason
+
+
+def clear_lab_unsafe_lock() -> None:
+    """Clear the unsafe laboratory lock and reset runtime configuration to safe defaults."""
+    global _LAB_RUNTIME_CONFIG
+    _LAB_RUNTIME_CONFIG = LabRuntimeConfiguration()
+
+
+def restore_lab_configuration(
+    snapshot: dict[str, Any],
+    *,
+    simulate_restore_failure: bool = False,
+) -> tuple[bool, dict[str, Any]]:
+    """Restore the laboratory to a previously captured configuration snapshot and verify it."""
+    global _LAB_RUNTIME_CONFIG, _PRIVATE_STATE
+    if simulate_restore_failure:
+        mark_lab_unsafe(
+            "Sandbox configuration restoration failed verification: "
+            "residual mutation remained active."
+        )
+        return False, capture_lab_configuration()
+
+    if "runtime_config" in snapshot:
+        _LAB_RUNTIME_CONFIG = LabRuntimeConfiguration(**snapshot["runtime_config"])
+    if "fault_state" in snapshot:
+        fs = snapshot["fault_state"]
+        _PRIVATE_STATE = PrivateLabGroundTruthState(
+            profile=fs.get("profile", "normal"),
+            blinded=bool(fs.get("blinded", False)),
+            payment_added_latency_ms=float(fs.get("payment_added_latency_ms", 0.0)),
+            payment_failure_probability=float(fs.get("payment_failure_probability", 0.0)),
+            db_added_latency_ms=float(fs.get("db_added_latency_ms", 0.0)),
+            db_lock_saturation_pct=float(fs.get("db_lock_saturation_pct", 18.0)),
+            inventory_added_latency_ms=float(fs.get("inventory_added_latency_ms", 0.0)),
+            ambiguous_jitter_ms=float(fs.get("ambiguous_jitter_ms", 0.0)),
+        )
+    current = capture_lab_configuration()
+    verified = current["runtime_config"] == snapshot.get("runtime_config") and current[
+        "fault_state"
+    ]["profile"] == snapshot.get("fault_state", {}).get("profile")
+    if not verified:
+        mark_lab_unsafe("Configuration hash mismatch after restoration.")
+    return verified, current
+
+
+def apply_lab_remediation_action(
+    action_type: str,
+    target_service_key: str,
+    parameters: dict[str, Any],
+) -> dict[str, Any]:
+    """Apply an allowlisted remediation action to the isolated Synthetic Laboratory."""
+    global _LAB_RUNTIME_CONFIG
+    if action_type not in ALLOWLISTED_REMEDIATION_ACTIONS:
+        raise ValueError(f"Unsupported or disallowed remediation action: {action_type}")
+
+    if action_type == "restore_safe_lab_configuration":
+        _LAB_RUNTIME_CONFIG = LabRuntimeConfiguration()
+        set_lab_profile("normal", blinded=False)
+        return capture_lab_configuration()
+
+    if action_type == "adjust_service_replicas":
+        replicas = int(parameters.get("replicas", parameters.get("value", 3)))
+        _LAB_RUNTIME_CONFIG.service_replicas[target_service_key] = replicas
+        # If scaling checkout-service under unresolved DB lock contention, amplify lock penalty
+        if (
+            target_service_key == "checkout-service"
+            and replicas >= 5
+            and _PRIVATE_STATE.profile == "db_lock_contention"
+            and not _LAB_RUNTIME_CONFIG.db_lock_relief_enabled
+        ):
+            _LAB_RUNTIME_CONFIG.regression_penalty_ms = 240.0
+
+    elif action_type == "modify_concurrency_limit":
+        limit = int(parameters.get("concurrency_limit", parameters.get("value", 40)))
+        _LAB_RUNTIME_CONFIG.concurrency_limits[target_service_key] = limit
+        if limit < 12:
+            # Excessively low concurrency limit causes thread queuing regression
+            _LAB_RUNTIME_CONFIG.regression_penalty_ms = 290.0
+
+    elif action_type == "toggle_circuit_breaker":
+        enabled = bool(parameters.get("enabled", True))
+        _LAB_RUNTIME_CONFIG.circuit_breakers[target_service_key] = enabled
+
+    elif action_type == "apply_rate_limiting":
+        factor = float(parameters.get("rate_limit_factor", parameters.get("value", 0.65)))
+        _LAB_RUNTIME_CONFIG.rate_limit_factor = factor
+
+    elif action_type == "adjust_db_contention_controls":
+        conn_cap = float(parameters.get("db_connection_capacity", parameters.get("value", 160.0)))
+        _LAB_RUNTIME_CONFIG.db_connection_capacity = conn_cap
+        _LAB_RUNTIME_CONFIG.db_lock_relief_enabled = conn_cap >= 100.0
+        _LAB_RUNTIME_CONFIG.regression_penalty_ms = 0.0
+
+    elif action_type == "restart_synthetic_service":
+        if target_service_key not in _LAB_RUNTIME_CONFIG.restarted_services:
+            _LAB_RUNTIME_CONFIG.restarted_services.append(target_service_key)
+        if target_service_key == "payment-simulator":
+            _LAB_RUNTIME_CONFIG.payment_fastpath_enabled = True
+            _LAB_RUNTIME_CONFIG.regression_penalty_ms = 0.0
+
+    if parameters.get("induce_regression"):
+        _LAB_RUNTIME_CONFIG.regression_penalty_ms = float(
+            parameters.get("regression_penalty_ms", 360.0)
+        )
+
+    return capture_lab_configuration()
+
 
 def get_lab_state() -> LabFaultState:
     """Return Investigator-safe laboratory state (masks ground truth when blinded)."""
@@ -223,9 +402,12 @@ def set_lab_profile(
     profile: LabProfileType,
     *,
     blinded: bool = False,
+    preserve_runtime_config: bool = False,
 ) -> LabFaultState:
     """Configure the laboratory operating profile (optionally blinded for hidden benchmarks)."""
-    global _PRIVATE_STATE
+    global _PRIVATE_STATE, _LAB_RUNTIME_CONFIG
+    if not preserve_runtime_config:
+        _LAB_RUNTIME_CONFIG = LabRuntimeConfiguration()
     now = datetime.now(UTC)
     if profile == "normal":
         _PRIVATE_STATE = PrivateLabGroundTruthState(
@@ -443,39 +625,54 @@ class SyntheticLabOrchestrator:
         t0 = time.perf_counter()
         base_ts = datetime.now(UTC)
 
-        # Compute effective fault physics under the active intervention
+        # Compute effective fault physics under active intervention and runtime config
+        rt_cfg = _LAB_RUNTIME_CONFIG
         eff_db_latency = state.db_added_latency_ms
         eff_db_sat = state.db_lock_saturation_pct
-        if intervention == "relieve_db_lock_contention":
+        if (
+            intervention == "relieve_db_lock_contention"
+            or rt_cfg.db_lock_relief_enabled
+            or rt_cfg.db_connection_capacity >= 100.0
+        ):
             eff_db_latency = eff_db_latency * 0.04
             eff_db_sat = min(eff_db_sat, 22.0)
 
         eff_pay_latency = state.payment_added_latency_ms
         eff_pay_fail_prob = state.payment_failure_probability
-        if intervention == "isolate_payment_fastpath":
+        if (
+            intervention == "isolate_payment_fastpath"
+            or rt_cfg.payment_fastpath_enabled
+            or "payment-simulator" in rt_cfg.restarted_services
+        ):
             eff_pay_latency = eff_pay_latency * 0.03
             eff_pay_fail_prob = 0.0
+        elif rt_cfg.circuit_breakers.get("checkout-service", False):
+            eff_pay_latency = min(eff_pay_latency, 12.0)
+            eff_pay_fail_prob = min(eff_pay_fail_prob, 0.04)
 
         eff_inv_latency = state.inventory_added_latency_ms
-        if intervention == "scale_inventory_workers":
+        if (
+            intervention == "scale_inventory_workers"
+            or rt_cfg.service_replicas.get("inventory-service", 2) >= 4
+            or "inventory-service" in rt_cfg.restarted_services
+        ):
             eff_inv_latency = eff_inv_latency * 0.04
+
+        if rt_cfg.rate_limit_factor < 0.85:
+            eff_pay_latency *= rt_cfg.rate_limit_factor
+            eff_db_latency *= rt_cfg.rate_limit_factor
+            eff_inv_latency *= rt_cfg.rate_limit_factor
 
         # Uncorrelated stochastic noise when noisy_ambiguous_jitter is active
         # Notice that no single-service intervention removes noisy_ambiguous_jitter!
         jitter_pay = (
-            rng.uniform(10.0, state.ambiguous_jitter_ms)
-            if state.ambiguous_jitter_ms > 0
-            else 0.0
+            rng.uniform(10.0, state.ambiguous_jitter_ms) if state.ambiguous_jitter_ms > 0 else 0.0
         )
         jitter_db = (
-            rng.uniform(10.0, state.ambiguous_jitter_ms)
-            if state.ambiguous_jitter_ms > 0
-            else 0.0
+            rng.uniform(10.0, state.ambiguous_jitter_ms) if state.ambiguous_jitter_ms > 0 else 0.0
         )
         jitter_inv = (
-            rng.uniform(10.0, state.ambiguous_jitter_ms)
-            if state.ambiguous_jitter_ms > 0
-            else 0.0
+            rng.uniform(10.0, state.ambiguous_jitter_ms) if state.ambiguous_jitter_ms > 0 else 0.0
         )
 
         # Span IDs for the 5-service call hierarchy
@@ -489,17 +686,13 @@ class SyntheticLabOrchestrator:
         # 1. Inventory -> Database Simulator query
         await asyncio.sleep(0.001)
         db_inv_dur = round(
-            rng.uniform(8.5, 15.5)
-            + eff_db_latency * rng.uniform(0.88, 1.12)
-            + jitter_db * 0.5,
+            rng.uniform(8.5, 15.5) + eff_db_latency * rng.uniform(0.88, 1.12) + jitter_db * 0.5,
             2,
         )
 
         # 2. Inventory Service reservation (includes DB call + local stock compute)
         inv_local_dur = round(
-            rng.uniform(11.0, 19.5)
-            + eff_inv_latency * rng.uniform(0.90, 1.12)
-            + jitter_inv,
+            rng.uniform(11.0, 19.5) + eff_inv_latency * rng.uniform(0.90, 1.12) + jitter_inv,
             2,
         )
         inv_total_dur = round(db_inv_dur + inv_local_dur, 2)
@@ -507,9 +700,7 @@ class SyntheticLabOrchestrator:
         # 3. Payment Simulator authorization
         await asyncio.sleep(0.001)
         pay_dur = round(
-            rng.uniform(24.0, 39.0)
-            + eff_pay_latency * rng.uniform(0.92, 1.18)
-            + jitter_pay,
+            rng.uniform(24.0, 39.0) + eff_pay_latency * rng.uniform(0.92, 1.18) + jitter_pay,
             2,
         )
         pay_failed = rng.random() < eff_pay_fail_prob
@@ -518,9 +709,7 @@ class SyntheticLabOrchestrator:
 
         # 4. Checkout -> Database Simulator order commit
         db_ord_dur = round(
-            rng.uniform(10.0, 18.0)
-            + eff_db_latency * rng.uniform(0.90, 1.15)
-            + jitter_db * 0.5,
+            rng.uniform(10.0, 18.0) + eff_db_latency * rng.uniform(0.90, 1.15) + jitter_db * 0.5,
             2,
         )
         db_failed = eff_db_sat >= 88.0 and rng.random() < 0.14
@@ -528,8 +717,11 @@ class SyntheticLabOrchestrator:
         db_status_code: Literal["OK", "ERROR"] = "ERROR" if db_failed else "OK"
 
         # 5. Checkout Orchestrator total duration & status
-        chk_overhead = round(rng.uniform(9.5, 16.5), 2)
-        if intervention == "hedged_concurrency_limiter":
+        chk_overhead = round(rng.uniform(9.5, 16.5) + _LAB_RUNTIME_CONFIG.regression_penalty_ms, 2)
+        if (
+            intervention == "hedged_concurrency_limiter"
+            or _LAB_RUNTIME_CONFIG.concurrency_limits.get("checkout-service", 30) >= 60
+        ):
             chk_overhead = round(max(4.0, chk_overhead * 0.65), 2)
         chk_total_dur = round(inv_total_dur + pay_dur + db_ord_dur + chk_overhead, 2)
         chk_failed = pay_failed or db_failed
@@ -872,9 +1064,13 @@ class SyntheticLabOrchestrator:
         execution_mode = "embedded_instrumented_pipeline"
         traces: list[LabTransactionTraceSummary] = []
 
-        # Only delegate to external lab HTTP container if not running a blinded benchmark or
-        # seeded intervention trial that requires deterministic in-process seed control
-        if not _PRIVATE_STATE.blinded and request.intervention == "none":
+        # Only delegate to external lab HTTP container if not running a blinded benchmark,
+        # seeded intervention trial, or custom remediation runtime configuration
+        if (
+            not _PRIVATE_STATE.blinded
+            and request.intervention == "none"
+            and LabRuntimeConfiguration() == _LAB_RUNTIME_CONFIG
+        ):
             try:
                 async with httpx.AsyncClient(timeout=4.0) as client:
                     resp = await client.post(
@@ -889,10 +1085,7 @@ class SyntheticLabOrchestrator:
                     if resp.status_code == 200:
                         data = resp.json()
                         execution_mode = "isolated_lab_container_http"
-                        traces = [
-                            LabTransactionTraceSummary(**t)
-                            for t in data.get("traces", [])
-                        ]
+                        traces = [LabTransactionTraceSummary(**t) for t in data.get("traces", [])]
             except Exception:
                 pass
 

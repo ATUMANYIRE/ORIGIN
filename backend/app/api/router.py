@@ -51,16 +51,33 @@ from app.modules.laboratory.benchmark_controller import (
 )
 from app.modules.laboratory.orchestrator import (
     ALLOWLISTED_INTERVENTIONS,
+    ALLOWLISTED_REMEDIATION_ACTIONS,
     LabExecutionResult,
     LabFaultState,
     LabProfileType,
     LabTransactionRequest,
     PrivateLabGroundTruthState,
     SyntheticLabOrchestrator,
+    clear_lab_unsafe_lock,
     get_lab_state,
     get_private_ground_truth_for_evaluator,
+    is_lab_unsafe_locked,
     set_lab_profile,
 )
+from app.modules.recovery.policy import SafetyPolicyEngine
+from app.modules.recovery.schemas import (
+    ApprovalRecordRead,
+    CandidateGenerationRequest,
+    ManualRollbackRequest,
+    PlanMutationRequest,
+    RecoveryApprovalRequest,
+    RecoveryExecutionRequest,
+    RecoveryPlanDetailRead,
+    RecoveryPlanRead,
+    RecoveryWorkflowCreateRequest,
+    SandboxVerifyRequest,
+)
+from app.modules.recovery.service import AutonomousRecoveryService
 from app.modules.registry.schemas import (
     DependencyCreate,
     DependencyRead,
@@ -519,9 +536,7 @@ async def get_investigation(
     db: AsyncSession = Depends(get_db),
 ) -> InvestigationDetailRead:
     """Inspect an investigation including its hypotheses, experiments, runs, and evidence."""
-    return await AutonomousInvestigatorService.get_investigation_detail(
-        db, investigation_id
-    )
+    return await AutonomousInvestigatorService.get_investigation_detail(db, investigation_id)
 
 
 @api_router.post(
@@ -617,8 +632,7 @@ async def get_investigation_experiments(
     return {
         "investigation_id": investigation_id,
         "experiment_plans": [
-            ExperimentDefinitionRead.model_validate(p).model_dump(mode="json")
-            for p in plans
+            ExperimentDefinitionRead.model_validate(p).model_dump(mode="json") for p in plans
         ],
         "experiment_runs": [
             ExperimentRunRead.model_validate(r).model_dump(mode="json") for r in runs
@@ -730,9 +744,7 @@ async def list_digital_twins(
     db: AsyncSession = Depends(get_db),
 ) -> list[DigitalTwinModelRead]:
     """List calibrated Digital Twin model versions."""
-    return await DigitalTwinService.list_twin_models(
-        db, system_id=system_id, limit=limit
-    )
+    return await DigitalTwinService.list_twin_models(db, system_id=system_id, limit=limit)
 
 
 @api_router.get(
@@ -759,9 +771,7 @@ async def get_twin_calibrations(
     db: AsyncSession = Depends(get_db),
 ) -> list[CalibrationRunRead]:
     """Inspect calibration runs, held-out residuals, and quality metrics for a Digital Twin."""
-    return await DigitalTwinService.list_calibration_runs(
-        db, twin_model_id=twin_model_id
-    )
+    return await DigitalTwinService.list_calibration_runs(db, twin_model_id=twin_model_id)
 
 
 @api_router.post(
@@ -790,9 +800,7 @@ async def list_simulation_snapshots(
     db: AsyncSession = Depends(get_db),
 ) -> list[SimulationSnapshotRead]:
     """List saved simulation state snapshots."""
-    return await DigitalTwinService.list_snapshots(
-        db, twin_model_id=twin_model_id, limit=limit
-    )
+    return await DigitalTwinService.list_snapshots(db, twin_model_id=twin_model_id, limit=limit)
 
 
 @api_router.get(
@@ -924,9 +932,7 @@ async def run_digital_twin_benchmarks(
     _principal: AuthenticatedPrincipal = Depends(verify_api_key),
 ) -> SimulationBenchmarkSuiteResponse:
     """Execute all 4 canonical Milestone 03/05 Digital Twin benchmarks (A, B, C, D)."""
-    return await DigitalTwinService.run_simulation_benchmarks(
-        db, random_seed=random_seed
-    )
+    return await DigitalTwinService.run_simulation_benchmarks(db, random_seed=random_seed)
 
 
 @api_router.get(
@@ -1006,9 +1012,7 @@ async def run_benchmark_matrix(
     _controller: AuthenticatedPrincipal = Depends(verify_benchmark_controller),
 ) -> BenchmarkMatrixResponse:
     """Execute the full 5-scenario hidden-fault benchmark matrix and return scores."""
-    return await BenchmarkControllerService.run_benchmark_matrix(
-        db, random_seed=random_seed
-    )
+    return await BenchmarkControllerService.run_benchmark_matrix(db, random_seed=random_seed)
 
 
 @api_router.get(
@@ -1045,11 +1049,218 @@ async def list_audit_events(
     return [AuditEventRead.model_validate(r) for r in rows]
 
 
+@api_router.get("/safety/policies", tags=["safety"])
+async def get_safety_policy_rules() -> dict[str, Any]:
+    """Return the fail-closed Operational Safety Policy specification and laboratory lock state."""
+    locked, reason = is_lab_unsafe_locked()
+    return {
+        "policy_engine": "SafetyPolicyEngine (Fail-Closed)",
+        "lab_unsafe_locked": locked,
+        "lab_unsafe_reason": reason,
+        "rules": SafetyPolicyEngine.get_policy_specification(),
+        "allowlisted_remediation_actions": sorted(ALLOWLISTED_REMEDIATION_ACTIONS),
+    }
+
+
+@api_router.post("/safety/clear-lab-lock", tags=["safety"])
+async def reset_lab_unsafe_lock(
+    _principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> dict[str, Any]:
+    """Clear the laboratory unsafe lock and restore safe baseline configuration."""
+    clear_lab_unsafe_lock()
+    return {"status": "restored", "lab_unsafe_locked": False}
+
+
+# ---------------------------------------------------------------------------
+# Milestone 04/05: Verified Autonomous Recovery, Sandbox & Approval Endpoints
+# ---------------------------------------------------------------------------
+
+
+@api_router.post(
+    "/recovery/plans",
+    response_model=RecoveryPlanDetailRead,
+    status_code=status.HTTP_201_CREATED,
+    tags=["recovery"],
+)
+async def create_recovery_plan(
+    payload: RecoveryWorkflowCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(verify_api_key),
+    correlation_id: str = Depends(get_correlation_id),
+) -> RecoveryPlanDetailRead:
+    """Create a recovery workflow from causal evidence and optionally verify in sandbox."""
+    return await AutonomousRecoveryService.create_recovery_workflow(
+        db,
+        payload,
+        actor=principal.actor,
+        correlation_id=correlation_id,
+    )
+
+
+@api_router.get(
+    "/recovery/plans",
+    response_model=list[RecoveryPlanRead],
+    tags=["recovery"],
+)
+async def list_recovery_plans(
+    system_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+) -> list[RecoveryPlanRead]:
+    """List autonomous recovery workflows."""
+    return await AutonomousRecoveryService.list_plans(db, system_id=system_id, limit=limit)
+
+
+@api_router.get(
+    "/recovery/plans/{plan_id}",
+    response_model=RecoveryPlanDetailRead,
+    tags=["recovery"],
+)
+async def get_recovery_plan(
+    plan_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> RecoveryPlanDetailRead:
+    """Inspect a recovery workflow including candidates, sandbox runs, approvals, and rollbacks."""
+    return await AutonomousRecoveryService.get_plan_detail(db, plan_id)
+
+
+@api_router.post(
+    "/recovery/plans/{plan_id}/candidates",
+    response_model=RecoveryPlanDetailRead,
+    tags=["recovery"],
+)
+async def generate_recovery_candidates(
+    plan_id: str,
+    payload: CandidateGenerationRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> RecoveryPlanDetailRead:
+    """Generate bounded remediation candidates and simulate each in the calibrated Digital Twin."""
+    return await AutonomousRecoveryService.generate_and_simulate_candidates(
+        db, plan_id, payload, actor=principal.actor
+    )
+
+
+@api_router.post(
+    "/recovery/plans/{plan_id}/sandbox-verify",
+    response_model=RecoveryPlanDetailRead,
+    tags=["recovery"],
+)
+async def verify_recovery_candidate_in_sandbox(
+    plan_id: str,
+    payload: SandboxVerifyRequest,
+    db: AsyncSession = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> RecoveryPlanDetailRead:
+    """Run real isolated laboratory sandbox verification with restoration verification."""
+    return await AutonomousRecoveryService.run_sandbox_verification(
+        db, plan_id, payload, actor=principal.actor
+    )
+
+
+@api_router.patch(
+    "/recovery/plans/{plan_id}",
+    response_model=RecoveryPlanDetailRead,
+    tags=["recovery"],
+)
+async def mutate_recovery_plan_endpoint(
+    plan_id: str,
+    payload: PlanMutationRequest,
+    db: AsyncSession = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> RecoveryPlanDetailRead:
+    """Update a recovery plan's candidate or parameters (invalidates prior approvals)."""
+    return await AutonomousRecoveryService.mutate_recovery_plan(
+        db, plan_id, payload, actor=principal.actor
+    )
+
+
+@api_router.post(
+    "/recovery/plans/{plan_id}/approve",
+    response_model=ApprovalRecordRead,
+    status_code=status.HTTP_201_CREATED,
+    tags=["recovery"],
+)
+async def approve_or_reject_recovery_plan(
+    plan_id: str,
+    payload: RecoveryApprovalRequest,
+    db: AsyncSession = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> ApprovalRecordRead:
+    """Record a human approval or rejection and issue a single-use authorization token."""
+    return await AutonomousRecoveryService.submit_human_approval(
+        db, plan_id, payload, actor=principal.actor
+    )
+
+
+@api_router.post(
+    "/recovery/plans/{plan_id}/execute",
+    response_model=RecoveryPlanDetailRead,
+    tags=["recovery"],
+)
+async def execute_approved_recovery_plan(
+    plan_id: str,
+    payload: RecoveryExecutionRequest,
+    db: AsyncSession = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> RecoveryPlanDetailRead:
+    """Execute an approved recovery action, observe telemetry, and auto-rollback on regression."""
+    return await AutonomousRecoveryService.execute_approved_recovery(
+        db, plan_id, payload, actor=principal.actor
+    )
+
+
+@api_router.post(
+    "/recovery/plans/{plan_id}/rollback",
+    response_model=RecoveryPlanDetailRead,
+    tags=["recovery"],
+)
+async def rollback_recovery_plan_endpoint(
+    plan_id: str,
+    payload: ManualRollbackRequest,
+    db: AsyncSession = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> RecoveryPlanDetailRead:
+    """Trigger an explicit rollback of an executed recovery action."""
+    return await AutonomousRecoveryService.trigger_manual_rollback(
+        db, plan_id, payload, actor=principal.actor
+    )
+
+
+@api_router.post(
+    "/recovery/plans/{plan_id}/cancel",
+    response_model=RecoveryPlanDetailRead,
+    tags=["recovery"],
+)
+async def cancel_recovery_plan_endpoint(
+    plan_id: str,
+    db: AsyncSession = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(verify_api_key),
+) -> RecoveryPlanDetailRead:
+    """Cancel a recovery workflow (and roll back if currently executing)."""
+    return await AutonomousRecoveryService.cancel_recovery_plan(db, plan_id, actor=principal.actor)
+
+
+@api_router.get(
+    "/recovery/plans/{plan_id}/export",
+    tags=["recovery"],
+)
+async def export_recovery_plan_report(
+    plan_id: str,
+    format: Literal["markdown", "json"] = Query(default="markdown"),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Export a reproducible Markdown & JSON scientific recovery & safety audit report."""
+    return await AutonomousRecoveryService.export_recovery_report(db, plan_id, report_format=format)
+
+
 @api_router.get("/architecture/modules", tags=["architecture"])
 async def list_module_boundaries() -> dict[str, Any]:
     """Return explicit implementation status across all 9 ORIGIN architectural boundaries."""
     return {
-        "milestone": "03/05 — Living Digital Twin, Counterfactual Intelligence & Scientific Memory",
+        "milestone": (
+            "04/05 — Verified Autonomous Recovery, Agent Orchestration & Operational Safety"
+        ),
         "boundaries": [
             {
                 "boundary_number": 1,
