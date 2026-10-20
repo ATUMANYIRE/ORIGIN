@@ -1,0 +1,85 @@
+[
+  {
+    "name": "Digital Twin Discrete-Event Simulation",
+    "operations_completed": 500,
+    "duration_seconds": 6.2576,
+    "throughput_ops_sec": 79.9,
+    "p50_latency_ms": 11.058,
+    "p95_latency_ms": 24.17,
+    "p99_latency_ms": 33.23,
+    "metrics": {
+      "total_simulation_steps": 15000,
+      "steps_per_second": 2397.1,
+      "modeled_services_per_step": 5,
+      "total_service_evaluations": 75000,
+      "service_evaluations_per_second": 11985.4
+    },
+    "status": "PASSED"
+  },
+  {
+    "name": "Monte Carlo Calibration & Uncertainty Estimation",
+    "operations_completed": 200,
+    "duration_seconds": 2.0975,
+    "throughput_ops_sec": 95.4,
+    "p50_latency_ms": 7.687,
+    "p95_latency_ms": 24.694,
+    "p99_latency_ms": 59.989,
+    "metrics": {
+      "monte_carlo_samples": 200,
+      "mean_end_latency_ms": 114.07,
+      "std_end_latency_ms": 3.95,
+      "empirical_95_ci": [
+        106.68,
+        122.7
+      ],
+      "interval_width_ms": 16.02
+    },
+    "status": "PASSED"
+  },
+  {
+    "name": "Causal Statistical Inference Engine",
+    "operations_completed": 1000,
+    "duration_seconds": 1.3008,
+    "throughput_ops_sec": 768.8,
+    "p50_latency_ms": 0.5261,
+    "p95_latency_ms": 3.7471,
+    "p99_latency_ms": 7.608,
+    "metrics": {
+      "tests_computed": "Welch's t-test + Cohen's d + Two-Sided Confidence Intervals",
+      "samples_per_comparison": 80,
+      "total_samples_analyzed": 80000
+    },
+    "status": "PASSED"
+  },
+  {
+    "name": "OpenTelemetry Batch Deserialization & Pydantic Validation",
+    "operations_completed": 500,
+    "duration_seconds": 0.2476,
+    "throughput_ops_sec": 2019.4,
+    "p50_latency_ms": 0.297,
+    "p95_latency_ms": 1.159,
+    "p99_latency_ms": 3.495,
+    "metrics": {
+      "total_spans_validated": 10000,
+      "spans_per_second": 40387.1,
+      "batch_size_spans": 20
+    },
+    "status": "PASSED"
+  },
+  {
+    "name": "Resilience & Fault Containment Checks",
+    "operations_completed": 52,
+    "duration_seconds": 0.003,
+    "throughput_ops_sec": 17202.6,
+    "p50_latency_ms": 0.05,
+    "p95_latency_ms": 0.1,
+    "p99_latency_ms": 0.2,
+    "metrics": {
+      "quarantined_malformed_payloads": 50,
+      "zero_variance_degenerate_handled": true,
+      "unknown_intervention_rejected": true,
+      "memory_leak_detected": false
+    },
+    "status": "PASSED"
+  }
+]
