@@ -66,16 +66,20 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title="ORIGIN — Autonomous Scientific Intelligence Platform",
-    description="Give software the ability to understand itself. (Milestone 01/05)",
+    description=(
+        "Give software the ability to understand itself. "
+        "(Milestone 05/05 — Independent Verification, Hardening & Submission)"
+    ),
     version="0.1.0",
     lifespan=lifespan,
 )
 
+# Hardened CORS: Restrict to configured origins in production, reject wildcard credentials
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=settings.cors_origins if settings.origin_env == "production" else ["*"],
+    allow_credentials=settings.origin_env == "production",
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
