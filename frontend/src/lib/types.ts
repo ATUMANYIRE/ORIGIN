@@ -716,3 +716,279 @@ export interface SimulationBenchmarkSuiteResponse {
   benchmarks: SimulationBenchmarkScenarioResult[];
 }
 
+// ---------------------------------------------------------------------------
+// Milestone 04/05: Verified Autonomous Recovery, Approvals & Safety Types
+// ---------------------------------------------------------------------------
+
+export type RecoveryStatusType =
+  | "DETECTED"
+  | "INVESTIGATING"
+  | "SIMULATING"
+  | "PROPOSING"
+  | "SANDBOX_VERIFYING"
+  | "AWAITING_APPROVAL"
+  | "APPROVED"
+  | "EXECUTING"
+  | "OBSERVING"
+  | "RECOVERED"
+  | "ROLLED_BACK"
+  | "REJECTED"
+  | "FAILED"
+  | "CANCELLED"
+  | "MANUAL_INTERVENTION_REQUIRED";
+
+export interface RemediationCandidateRead {
+  id: string;
+  recovery_plan_id: string;
+  system_id: string;
+  target_service_key: string;
+  suspected_root_cause: string;
+  action_type: string;
+  parameters_json: Record<string, unknown>;
+  preconditions_json: string[];
+  expected_effect_json: {
+    expected_latency_reduction_pct?: number;
+    target_metric?: string;
+    rationale?: string;
+  };
+  adverse_effects_json: string[];
+  rollback_strategy_json: {
+    strategy?: string;
+    fallback_action?: string;
+    target_service_key?: string;
+    verification_required?: boolean;
+  };
+  evidence_refs_json: string[];
+  simulation_branch_id: string | null;
+  simulation_prediction_json: {
+    epistemic_label: string;
+    baseline_simulated_latency_ms: number;
+    predicted_mean_latency_ms: number;
+    predicted_latency_reduction_pct: number;
+    predicted_error_rate_pct: number;
+    predicted_throughput_rps: number;
+    uncertainty_95_ms?: [number, number];
+    note: string;
+  };
+  sandbox_verification_id: string | null;
+  verification_status:
+    | "unverified"
+    | "simulated_only"
+    | "sandbox_verified"
+    | "sandbox_failed"
+    | "policy_rejected";
+  risk_classification: "low" | "medium" | "high" | "critical";
+  approval_requirements_json: Record<string, unknown>;
+  rank_score: number;
+  created_at: string;
+}
+
+export interface SandboxVerificationRunRead {
+  id: string;
+  recovery_plan_id: string;
+  candidate_id: string;
+  system_id: string;
+  status: string;
+  initial_config_json: Record<string, unknown>;
+  baseline_metrics_json: {
+    mean_latency_ms: number;
+    error_rate_pct: number;
+    sample_count: number;
+    correlation_ids: string[];
+  };
+  treatment_metrics_json: {
+    mean_latency_ms: number;
+    error_rate_pct: number;
+    sample_count: number;
+    correlation_ids: string[];
+  };
+  post_restore_config_json: Record<string, unknown>;
+  post_restore_metrics_json: {
+    post_restore_latency_ms: number;
+    correlation_id: string;
+  };
+  statistical_comparison_json: StatisticalComparison;
+  regressions_detected_json: string[];
+  simulation_disagreement_json: {
+    predicted_latency_reduction_pct: number;
+    observed_latency_reduction_pct: number;
+    disagreement_detected: boolean;
+    note: string;
+  };
+  passed_thresholds: boolean;
+  restoration_verified: boolean;
+  evidence_trail_json: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface ApprovalRecordRead {
+  id: string;
+  recovery_plan_id: string;
+  candidate_id: string;
+  system_id: string;
+  plan_version: number;
+  plan_hash: string;
+  action_type: string;
+  action_parameters_json: Record<string, unknown>;
+  target_environment: string;
+  evidence_summary_json: Record<string, unknown>;
+  risk_classification: string;
+  approver_identity: string;
+  approver_role: string;
+  decision: "APPROVED" | "REJECTED" | "REVOKED";
+  rationale: string;
+  token_used: boolean;
+  approved_at: string;
+  expires_at: string;
+  used_at: string | null;
+  created_at: string;
+  issued_single_use_token: string | null;
+}
+
+export interface RecoveryExecutionRead {
+  id: string;
+  recovery_plan_id: string;
+  candidate_id: string;
+  approval_id: string;
+  system_id: string;
+  status: string;
+  idempotency_key: string | null;
+  lock_key: string;
+  previous_config_json: Record<string, unknown>;
+  applied_config_json: Record<string, unknown>;
+  pre_execution_metrics_json: {
+    mean_latency_ms?: number;
+    error_rate_pct?: number;
+  };
+  observed_metrics_json: {
+    mean_latency_ms?: number;
+    p95_latency_ms?: number;
+    error_rate_pct?: number;
+    sample_count?: number;
+    correlation_ids?: string[];
+  };
+  guardrail_evaluation_json: {
+    baseline_mean_latency_ms?: number;
+    observed_mean_latency_ms?: number;
+    observed_error_rate_pct?: number;
+    violations?: string[];
+    passed?: boolean;
+  };
+  verification_passed: boolean;
+  rollback_triggered: boolean;
+  rollback_id: string | null;
+  started_at: string;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface RollbackRecordRead {
+  id: string;
+  recovery_plan_id: string;
+  execution_id: string;
+  system_id: string;
+  trigger_reason: string;
+  target_config_json: Record<string, unknown>;
+  restored_config_json: Record<string, unknown>;
+  post_rollback_metrics_json: {
+    post_rollback_latency_ms?: number;
+    correlation_id?: string;
+  };
+  rollback_verified: boolean;
+  status: string;
+  created_at: string;
+}
+
+export interface SafetyPolicyEvaluationRead {
+  id: string;
+  recovery_plan_id: string | null;
+  candidate_id: string | null;
+  system_id: string;
+  policy_stage: string;
+  target_environment: string;
+  action_type: string;
+  allowed: boolean;
+  risk_classification: string;
+  violations_json: string[];
+  evaluated_rules_json: Record<string, unknown>;
+  actor: string;
+  created_at: string;
+}
+
+export interface SafetyPolicySpecResponse {
+  allowed_environments: string[];
+  allowlisted_actions: string[];
+  lab_unsafe_locked: boolean;
+  parameter_bounds: Record<string, unknown>;
+  guardrails: Record<string, unknown>;
+}
+
+export type RecoveryLifecycleState = RecoveryStatusType;
+
+export interface RecoveryLifecycleEntry {
+  from_state: string | null;
+  to_state: RecoveryStatusType;
+  timestamp: string;
+  actor: string;
+  agent_role: string;
+  rationale: string;
+  evidence_refs: string[];
+}
+
+export interface AgentRoleDecisionEntry {
+  step: number;
+  timestamp: string;
+  agent_role: string;
+  phase: string;
+  decision: string;
+  rationale: string;
+  artifacts: Record<string, unknown>;
+}
+
+export interface RecoveryPlanRead {
+  id: string;
+  system_id: string;
+  investigation_id: string | null;
+  twin_model_id: string | null;
+  title: string;
+  status: RecoveryStatusType;
+  target_environment: string;
+  root_cause_service_key: string | null;
+  root_cause_mechanism: string | null;
+  selected_candidate_id: string | null;
+  active_approval_id: string | null;
+  plan_version: number;
+  plan_hash: string;
+  cancel_requested: boolean;
+  idempotency_key: string | null;
+  recovery_attempts: number;
+  max_recovery_attempts: number;
+  baseline_metrics_json: {
+    mean_latency_ms?: number;
+    error_rate_pct?: number;
+    observed_span_count?: number;
+  };
+  evidence_summary_json: {
+    investigation_id?: string | null;
+    root_cause_service_key?: string | null;
+    root_cause_mechanism?: string | null;
+    causal_confidence_score?: number;
+    evidence_reference_ids?: string[];
+  };
+  lifecycle_history_json: RecoveryLifecycleEntry[];
+  agent_decision_history_json: AgentRoleDecisionEntry[];
+  failure_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecoveryPlanDetailRead extends RecoveryPlanRead {
+  candidates: RemediationCandidateRead[];
+  sandbox_runs: SandboxVerificationRunRead[];
+  approvals: ApprovalRecordRead[];
+  executions: RecoveryExecutionRead[];
+  rollbacks: RollbackRecordRead[];
+  policy_evaluations: SafetyPolicyEvaluationRead[];
+}
+
+

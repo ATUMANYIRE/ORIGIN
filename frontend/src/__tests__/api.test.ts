@@ -69,4 +69,12 @@ describe("ORIGIN Frontend Telemetry, Provenance & Causal Hypothesis Utilities", 
     expect(grouped[0]?.["payment-simulator"]).toBe(31.2);
     expect(grouped[0]?.correlationId).toBe("corr-abc-1");
   });
+
+  it("exposes API helper contracts for recovery workflows and safety policies", async () => {
+    const { fetchSafetyPolicies, fetchRecoveryPlans } = await import(
+      "../lib/api"
+    );
+    expect(typeof fetchSafetyPolicies).toBe("function");
+    expect(typeof fetchRecoveryPlans).toBe("function");
+  });
 });

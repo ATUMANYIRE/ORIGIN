@@ -1,4 +1,5 @@
 import type {
+  ApprovalRecordRead,
   AuditEventRead,
   BranchComparisonResponse,
   CalibrationRunRead,
@@ -17,6 +18,9 @@ import type {
   MetricPointRead,
   MetricSeriesSummary,
   ModuleBoundaryStatus,
+  RecoveryPlanDetailRead,
+  RecoveryPlanRead,
+  SafetyPolicySpecResponse,
   ScientificMemoryEntryRead,
   ServiceRead,
   SimulationBenchmarkSuiteResponse,
@@ -31,6 +35,9 @@ import type {
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+export const DEMO_API_KEY =
+  process.env.NEXT_PUBLIC_ORIGIN_API_KEY || "origin-dev-scientific-key-2026";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -393,6 +400,198 @@ export async function fetchScientificMemory(
     ? `?epistemic_kind=${encodeURIComponent(epistemicKind)}`
     : "";
   return apiFetch(`/api/v1/memory/entries${qs}`);
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 04/05: Verified Autonomous Recovery, Agent Orchestration & Safety
+// ---------------------------------------------------------------------------
+
+export async function fetchSafetyPolicies(): Promise<SafetyPolicySpecResponse> {
+  return apiFetch("/api/v1/safety/policies");
+}
+
+export async function clearLabUnsafeLock(): Promise<{
+  status: string;
+  lab_unsafe_locked: boolean;
+}> {
+  return apiFetch("/api/v1/safety/clear-lab-lock", {
+    method: "POST",
+    headers: { "X-Origin-Key": DEMO_API_KEY },
+  });
+}
+
+export async function createRecoveryPlan(payload: {
+  system_slug?: string;
+  title?: string;
+  target_environment?: string;
+  investigation_id?: string;
+  operator_root_cause_service_key?: string;
+  operator_root_cause_mechanism?: string;
+  idempotency_key?: string;
+  auto_prepare_to_approval?: boolean;
+  sandbox_trials_per_arm?: number;
+  random_seed?: number;
+}): Promise<RecoveryPlanDetailRead> {
+  return apiFetch("/api/v1/recovery/plans", {
+    method: "POST",
+    headers: { "X-Origin-Key": DEMO_API_KEY },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchRecoveryPlans(
+  systemId?: string
+): Promise<RecoveryPlanRead[]> {
+  const qs = systemId ? `?system_id=${encodeURIComponent(systemId)}` : "";
+  return apiFetch(`/api/v1/recovery/plans${qs}`);
+}
+
+export async function fetchRecoveryPlanDetail(
+  planId: string
+): Promise<RecoveryPlanDetailRead> {
+  return apiFetch(`/api/v1/recovery/plans/${encodeURIComponent(planId)}`);
+}
+
+export async function generateRecoveryCandidates(
+  planId: string,
+  payload: {
+    custom_action_type?: string;
+    custom_target_service_key?: string;
+    custom_parameters?: Record<string, unknown>;
+  } = {}
+): Promise<RecoveryPlanDetailRead> {
+  return apiFetch(
+    `/api/v1/recovery/plans/${encodeURIComponent(planId)}/candidates`,
+    {
+      method: "POST",
+      headers: { "X-Origin-Key": DEMO_API_KEY },
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function verifyRecoveryCandidateInSandbox(
+  planId: string,
+  payload: {
+    candidate_id?: string;
+    trials_per_arm?: number;
+    duration_seconds?: number;
+    random_seed?: number;
+    simulate_restore_failure?: boolean;
+  }
+): Promise<RecoveryPlanDetailRead> {
+  return apiFetch(
+    `/api/v1/recovery/plans/${encodeURIComponent(planId)}/sandbox-verify`,
+    {
+      method: "POST",
+      headers: { "X-Origin-Key": DEMO_API_KEY },
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function mutateRecoveryPlan(
+  planId: string,
+  payload: {
+    selected_candidate_id?: string;
+    parameter_overrides?: Record<string, unknown>;
+    reason?: string;
+  }
+): Promise<RecoveryPlanDetailRead> {
+  return apiFetch(`/api/v1/recovery/plans/${encodeURIComponent(planId)}`, {
+    method: "PATCH",
+    headers: { "X-Origin-Key": DEMO_API_KEY },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function approveOrRejectRecoveryPlan(
+  planId: string,
+  payload: {
+    candidate_id?: string;
+    decision: "APPROVED" | "REJECTED";
+    approver_identity?: string;
+    approver_role?: string;
+    rationale?: string;
+    ttl_seconds?: number;
+  }
+): Promise<ApprovalRecordRead> {
+  return apiFetch(
+    `/api/v1/recovery/plans/${encodeURIComponent(planId)}/approve`,
+    {
+      method: "POST",
+      headers: { "X-Origin-Key": DEMO_API_KEY },
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function executeApprovedRecoveryPlan(
+  planId: string,
+  payload: {
+    approval_id: string;
+    approval_token: string;
+    idempotency_key?: string;
+    observation_iterations?: number;
+    timeout_seconds?: number;
+    simulate_timeout?: boolean;
+    simulate_execution_regression?: boolean;
+    simulate_rollback_failure?: boolean;
+  }
+): Promise<RecoveryPlanDetailRead> {
+  return apiFetch(
+    `/api/v1/recovery/plans/${encodeURIComponent(planId)}/execute`,
+    {
+      method: "POST",
+      headers: { "X-Origin-Key": DEMO_API_KEY },
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function rollbackRecoveryPlan(
+  planId: string,
+  payload: {
+    execution_id?: string;
+    reason?: string;
+    simulate_rollback_failure?: boolean;
+  } = {}
+): Promise<RecoveryPlanDetailRead> {
+  return apiFetch(
+    `/api/v1/recovery/plans/${encodeURIComponent(planId)}/rollback`,
+    {
+      method: "POST",
+      headers: { "X-Origin-Key": DEMO_API_KEY },
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function cancelRecoveryPlan(
+  planId: string
+): Promise<RecoveryPlanDetailRead> {
+  return apiFetch(
+    `/api/v1/recovery/plans/${encodeURIComponent(planId)}/cancel`,
+    {
+      method: "POST",
+      headers: { "X-Origin-Key": DEMO_API_KEY },
+    }
+  );
+}
+
+export async function exportRecoveryPlanReport(
+  planId: string,
+  format: "markdown" | "json" = "markdown"
+): Promise<{
+  recovery_plan_id: string;
+  status: string;
+  format: string;
+  markdown: string;
+  report: Record<string, unknown>;
+}> {
+  return apiFetch(
+    `/api/v1/recovery/plans/${encodeURIComponent(planId)}/export?format=${format}`
+  );
 }
 
 export function formatProvenanceBadge(

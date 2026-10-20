@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("ORIGIN Milestone 01/05 & 02/05 Browser Verification", () => {
-  test("verifies live laboratory telemetry, topology explorer, causal investigation scientist, and research contracts", async ({
+test.describe("ORIGIN Milestone 01/05 - 04/05 Browser Verification", () => {
+  test("verifies live laboratory telemetry, topology explorer, causal investigation scientist, digital twin, recovery command center, and research contracts", async ({
     page,
   }) => {
-    test.setTimeout(90000);
+    test.setTimeout(120000);
     // 1. Visit Landing Page
     await page.goto("/");
     await expect(
@@ -137,7 +137,35 @@ test.describe("ORIGIN Milestone 01/05 & 02/05 Browser Verification", () => {
       "# ORIGIN Digital Twin Counterfactual Report"
     );
 
-    // 7. Navigate to Research Contracts and verify all 9 boundaries are implemented
+    // 7. Navigate to Recovery Command Center (/recovery), prepare workflow, approve with single-use token, and execute recovery
+    await page.goto("/recovery");
+    await expect(
+      page.getByRole("heading", {
+        name: "Verified Autonomous Recovery Command Center",
+      })
+    ).toBeVisible();
+
+    await page.getByTestId("launch-recovery-pipeline-btn").click();
+    await expect(page.getByTestId("active-plan-status-badge")).toContainText(
+      "AWAITING_APPROVAL",
+      { timeout: 60000 }
+    );
+
+    await page.getByTestId("approve-recovery-plan-btn").click();
+    await expect(page.getByTestId("issued-single-use-token-box")).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.getByTestId("active-plan-status-badge")).toContainText(
+      "APPROVED"
+    );
+
+    await page.getByTestId("execute-approved-recovery-btn").click();
+    await expect(page.getByTestId("active-plan-status-badge")).toContainText(
+      "RECOVERED",
+      { timeout: 30000 }
+    );
+
+    // 8. Navigate to Research Contracts and verify all 9 boundaries are implemented
     await page.goto("/research");
     await expect(
       page.getByTestId("implemented-module-simulation")
